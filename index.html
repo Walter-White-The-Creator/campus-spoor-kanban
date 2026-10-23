@@ -93,9 +93,95 @@
     }
 
     .stats {
-      margin-left: auto;
       font-size: 0.875rem;
       color: var(--muted);
+    }
+
+    .share-bar {
+      max-width: 1400px;
+      margin: 0.5rem auto 0;
+      padding: 0.75rem 1.25rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.85);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .share-bar label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .share-bar input[type="text"] {
+      flex: 1;
+      min-width: 12rem;
+      padding: 0.45rem 0.65rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-family: inherit;
+    }
+
+    .share-bar input[type="text"].room-input {
+      max-width: 8rem;
+      flex: 0 1 auto;
+    }
+
+    .share-bar button.primary {
+      background: var(--todo);
+      color: #fff;
+      border-color: var(--todo);
+    }
+
+    .share-bar button.primary:hover {
+      background: #2563eb;
+    }
+
+    .sync-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      padding: 0.35rem 0.65rem;
+      background: #f1f5f9;
+      border-radius: 999px;
+    }
+
+    .sync-status .dot {
+      width: 0.5rem;
+      height: 0.5rem;
+      border-radius: 50%;
+      background: #94a3b8;
+    }
+
+    .sync-status.live .dot {
+      background: var(--done);
+      box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.35);
+    }
+
+    .sync-status.connecting .dot {
+      background: var(--doing);
+      animation: pulse 1s ease infinite;
+    }
+
+    @keyframes pulse {
+      50% { opacity: 0.45; }
+    }
+
+    .toolbar-row {
+      max-width: 1400px;
+      margin: 0.75rem auto 0;
+      padding: 0 1.25rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
     }
 
     .board {
@@ -263,7 +349,7 @@
     <h1>Waar knelt het schoentje? — Kanbanbord</h1>
     <p>
       Sleep kaarten tussen kolommen of gebruik de pijltjes. Vink af in <strong>DONE</strong> wanneer een punt echt af is.
-      Voortgang wordt lokaal opgeslagen in je browser.
+      Deel de groepslink — iedereen in dezelfde kamer ziet verplaatsingen live.
     </p>
     <div class="flow" aria-hidden="true">
       <span class="todo-label">TODO</span>
@@ -274,7 +360,19 @@
     </div>
   </header>
 
-  <div class="toolbar">
+  <div class="share-bar" id="shareBar">
+    <label for="roomInput">Kamer</label>
+    <input type="text" id="roomInput" class="room-input" maxlength="32" autocomplete="off" spellcheck="false" title="Zelfde kamer = zelfde bord" />
+    <label for="shareUrl">Groepslink</label>
+    <input type="text" id="shareUrl" readonly />
+    <button type="button" id="copyLinkBtn" class="primary">Kopieer link</button>
+    <span class="sync-status connecting" id="syncStatus" aria-live="polite">
+      <span class="dot" aria-hidden="true"></span>
+      <span id="syncStatusText">Verbinden…</span>
+    </span>
+  </div>
+
+  <div class="toolbar-row">
     <button type="button" id="resetBtn">Alles terug naar TODO</button>
     <span class="stats" id="stats"></span>
   </div>
@@ -285,8 +383,11 @@
     Bron: waar_knelt_het_schoentje.txt — Campus Het Spoor website-backlog
   </footer>
 
-  <script>
+  <script src="firebase-config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <script type="module">
     const STORAGE_KEY = "campus-spoor-kanban-v1";
+    const DEFAULT_ROOM = "spoor";
 
     const INITIAL_TASKS = [
       { id: "1-1", category: "1. Beheer en gebruiksvriendelijkheid", title: "Simpeler beheer met drag-and-drop; minder ingewikkeld systeem" },
@@ -323,23 +424,269 @@
     const STATUSES = ["todo", "doing", "done"];
     const LABELS = { todo: "Todo", doing: "Doing", done: "Done" };
 
-    let state = loadState();
+    const clientId =
+      sessionStorage.getItem("kanban-client-id") ||
+      (() => {
+        const id = crypto.randomUUID();
+        sessionStorage.setItem("kanban-client-id", id);
+        return id;
+      })();
 
-    function loadState() {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed.tasks) && parsed.tasks.length) return parsed;
-        }
-      } catch (_) {}
+    let state = loadState();
+    let applyingRemote = false;
+    let syncPushTimer = null;
+    let syncMode = "local";
+    /** @type {import('firebase/database').Unsubscribe | null} */
+    let firebaseUnsub = null;
+    /** @type {import('y-webrtc').WebrtcProvider | null} */
+    let webrtcProvider = null;
+
+    function sanitizeRoom(raw) {
+      const s = String(raw || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, "")
+        .slice(0, 32);
+      return s || DEFAULT_ROOM;
+    }
+
+    function getRoomId() {
+      const params = new URLSearchParams(location.search);
+      return sanitizeRoom(params.get("room") || DEFAULT_ROOM);
+    }
+
+    function setRoomInUrl(roomId) {
+      const params = new URLSearchParams(location.search);
+      params.set("room", roomId);
+      const next = `${location.pathname}?${params.toString()}`;
+      history.replaceState(null, "", next);
+    }
+
+    function getShareUrl() {
+      const room = getRoomId();
+      const params = new URLSearchParams();
+      params.set("room", room);
+      return `${location.origin}${location.pathname}?${params.toString()}`;
+    }
+
+    function storageKey() {
+      return `${STORAGE_KEY}:${getRoomId()}`;
+    }
+
+    function defaultState() {
       return {
         tasks: INITIAL_TASKS.map((t) => ({ ...t, status: "todo", checked: false })),
+        updatedAt: 0,
+        clientId: "",
       };
     }
 
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(storageKey());
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed.tasks) && parsed.tasks.length) {
+            parsed.updatedAt = parsed.updatedAt || 0;
+            normalizeTasks(parsed.tasks);
+            return parsed;
+          }
+        }
+      } catch (_) {}
+      return defaultState();
+    }
+
     function saveState() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      if (applyingRemote) return;
+      state.updatedAt = Date.now();
+      state.clientId = clientId;
+      localStorage.setItem(storageKey(), JSON.stringify(state));
+      scheduleSyncPush();
+    }
+
+    function scheduleSyncPush() {
+      clearTimeout(syncPushTimer);
+      syncPushTimer = setTimeout(pushStateToPeers, 120);
+    }
+
+    function normalizeTasks(tasks) {
+      tasks.forEach((t) => {
+        if (t.status === "done") t.checked = true;
+      });
+    }
+
+    function fireConfetti() {
+      if (typeof confetti !== "function") return;
+      const n = 100;
+      const base = { origin: { y: 0.62 }, zIndex: 9999, colors: ["#3b82f6", "#f59e0b", "#10b981", "#ffffff"] };
+      confetti({ ...base, particleCount: n * 0.25, spread: 26, startVelocity: 55 });
+      confetti({ ...base, particleCount: n * 0.2, spread: 60 });
+      confetti({ ...base, particleCount: n * 0.35, spread: 100, decay: 0.91, scalar: 0.85 });
+      confetti({ ...base, particleCount: n * 0.2, spread: 120, startVelocity: 35 });
+    }
+
+    function detectNewlyCompleted(prevTasks, nextTasks) {
+      const prev = new Map(prevTasks.map((t) => [t.id, t.status]));
+      return nextTasks.some((t) => t.status === "done" && prev.get(t.id) !== "done");
+    }
+
+    function applyRemoteState(remote) {
+      if (!remote || !Array.isArray(remote.tasks)) return;
+      const remoteAt = remote.updatedAt || 0;
+      if (remoteAt < (state.updatedAt || 0)) return;
+      if (remoteAt === state.updatedAt && remote.clientId === state.clientId) return;
+      const prevTasks = state.tasks.map((t) => ({ id: t.id, status: t.status }));
+      applyingRemote = true;
+      state = {
+        tasks: remote.tasks,
+        updatedAt: remoteAt,
+        clientId: remote.clientId || "",
+      };
+      normalizeTasks(state.tasks);
+      const celebrate = detectNewlyCompleted(prevTasks, state.tasks);
+      localStorage.setItem(storageKey(), JSON.stringify(state));
+      render();
+      applyingRemote = false;
+      if (celebrate) fireConfetti();
+    }
+
+    function setSyncStatus(kind, text) {
+      const el = document.getElementById("syncStatus");
+      const textEl = document.getElementById("syncStatusText");
+      el.classList.remove("live", "connecting");
+      if (kind === "live") el.classList.add("live");
+      if (kind === "connecting") el.classList.add("connecting");
+      textEl.textContent = text;
+    }
+
+    function updateShareUi() {
+      document.getElementById("roomInput").value = getRoomId();
+      document.getElementById("shareUrl").value = getShareUrl();
+    }
+
+    async function pushStateToPeers() {
+      if (syncMode === "firebase" && firebaseDb) {
+        const { ref, set } = firebaseApi;
+        await set(ref(firebaseDb, `rooms/${getRoomId()}`), {
+          tasks: state.tasks,
+          updatedAt: state.updatedAt,
+          clientId: state.clientId,
+        });
+      } else if (syncMode === "webrtc" && yMap) {
+        yMap.set("payload", {
+          tasks: state.tasks,
+          updatedAt: state.updatedAt,
+          clientId: state.clientId,
+        });
+      }
+    }
+
+    let firebaseDb = null;
+    let firebaseApi = null;
+    let yMap = null;
+
+    async function initFirebaseSync(cfg) {
+      firebaseApi = await import(
+        "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js"
+      );
+      const { initializeApp } = await import(
+        "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js"
+      );
+      const app = initializeApp(cfg);
+      firebaseDb = firebaseApi.getDatabase(app);
+      syncMode = "firebase";
+
+      const roomRef = firebaseApi.ref(firebaseDb, `rooms/${getRoomId()}`);
+      let seeded = false;
+      firebaseUnsub = firebaseApi.onValue(roomRef, (snap) => {
+        const val = snap.val();
+        if (val) applyRemoteState(val);
+        else if (!seeded) pushStateToPeers();
+        seeded = true;
+        setSyncStatus("live", "Live · Firebase");
+      });
+    }
+
+    async function initWebRtcSync() {
+      const Y = await import("https://esm.sh/yjs@13.6.18");
+      const { WebrtcProvider } = await import("https://esm.sh/y-webrtc@10.3.0");
+
+      const ydoc = new Y.Doc();
+      const room = getRoomId();
+      webrtcProvider = new WebrtcProvider(room, ydoc, {
+        signaling: [
+          "wss://signaling.yjs.dev",
+          "wss://y-webrtc-eu.fly.dev",
+          "wss://y-webrtc-us.fly.dev",
+        ],
+      });
+      yMap = ydoc.getMap("kanban");
+      syncMode = "webrtc";
+
+      yMap.observe((event) => {
+        if (event.transaction.local) return;
+        const payload = yMap.get("payload");
+        if (payload) applyRemoteState(payload);
+      });
+
+      const updatePresence = () => {
+        const n = webrtcProvider.awareness.getStates().size;
+        setSyncStatus("live", n > 1 ? `Live · ${n} personen` : "Live · wacht op anderen");
+      };
+      webrtcProvider.awareness.on("change", updatePresence);
+      updatePresence();
+
+      const existing = yMap.get("payload");
+      if (existing && (existing.updatedAt || 0) > (state.updatedAt || 0)) {
+        applyRemoteState(existing);
+      } else {
+        await pushStateToPeers();
+      }
+    }
+
+    async function initSync() {
+      setSyncStatus("connecting", "Verbinden…");
+      updateShareUi();
+      const cfg = window.FIREBASE_CONFIG;
+      const hasFirebase =
+        cfg && cfg.apiKey && cfg.databaseURL && cfg.databaseURL.startsWith("https://");
+
+      try {
+        if (hasFirebase) {
+          await initFirebaseSync(cfg);
+        } else {
+          await initWebRtcSync();
+        }
+      } catch (err) {
+        console.warn("Sync niet beschikbaar:", err);
+        syncMode = "local";
+        setSyncStatus("connecting", "Alleen lokaal — vul firebase-config.js in voor betrouwbare sync");
+      }
+    }
+
+    function switchRoom(newRoomRaw) {
+      const newRoom = sanitizeRoom(newRoomRaw);
+      if (newRoom === getRoomId()) return;
+      if (firebaseUnsub) firebaseUnsub();
+      if (webrtcProvider) webrtcProvider.destroy();
+      firebaseUnsub = null;
+      webrtcProvider = null;
+      firebaseDb = null;
+      yMap = null;
+      setRoomInUrl(newRoom);
+      state = loadState();
+      render();
+      initSync();
+    }
+
+    function applyStatusChange(task, status, previousStatus) {
+      task.status = status;
+      if (status === "done") {
+        task.checked = true;
+        if (previousStatus !== "done") fireConfetti();
+      } else {
+        task.checked = false;
+      }
     }
 
     function moveTask(id, direction) {
@@ -348,8 +695,8 @@
       const idx = STATUSES.indexOf(task.status);
       const next = idx + direction;
       if (next < 0 || next >= STATUSES.length) return;
-      task.status = STATUSES[next];
-      if (task.status !== "done") task.checked = false;
+      const previousStatus = task.status;
+      applyStatusChange(task, STATUSES[next], previousStatus);
       saveState();
       render();
     }
@@ -357,8 +704,8 @@
     function setStatus(id, status) {
       const task = state.tasks.find((t) => t.id === id);
       if (!task || task.status === status) return;
-      task.status = status;
-      if (status !== "done") task.checked = false;
+      const previousStatus = task.status;
+      applyStatusChange(task, status, previousStatus);
       saveState();
       render();
     }
@@ -366,8 +713,14 @@
     function toggleChecked(id, checked) {
       const task = state.tasks.find((t) => t.id === id);
       if (!task) return;
+      const wasCompleted = task.status === "done" && task.checked;
       task.checked = checked;
-      if (checked && task.status !== "done") task.status = "done";
+      if (checked) {
+        if (task.status !== "done") {
+          task.status = "done";
+          if (!wasCompleted) fireConfetti();
+        }
+      }
       saveState();
       render();
     }
@@ -482,14 +835,45 @@
 
     document.getElementById("resetBtn").addEventListener("click", () => {
       if (!confirm("Alle kaarten terug naar TODO en vinkjes wissen?")) return;
-      state = {
-        tasks: INITIAL_TASKS.map((t) => ({ ...t, status: "todo", checked: false })),
-      };
+      state = defaultState();
       saveState();
       render();
     });
 
+    document.getElementById("copyLinkBtn").addEventListener("click", async () => {
+      const url = getShareUrl();
+      try {
+        await navigator.clipboard.writeText(url);
+        const btn = document.getElementById("copyLinkBtn");
+        const prev = btn.textContent;
+        btn.textContent = "Gekopieerd!";
+        setTimeout(() => {
+          btn.textContent = prev;
+        }, 2000);
+      } catch (_) {
+        document.getElementById("shareUrl").select();
+        document.execCommand("copy");
+      }
+    });
+
+    document.getElementById("roomInput").addEventListener("change", (e) => {
+      switchRoom(e.target.value);
+    });
+    document.getElementById("roomInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        e.target.blur();
+        switchRoom(e.target.value);
+      }
+    });
+
+    if (!new URLSearchParams(location.search).has("room")) {
+      setRoomInUrl(DEFAULT_ROOM);
+    }
+
     render();
+    updateShareUi();
+    initSync();
   </script>
 </body>
 </html>
