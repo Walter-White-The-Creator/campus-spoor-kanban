@@ -136,13 +136,6 @@
       box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.35);
     }
 
-    .sync-status.connecting .dot {
-      background: var(--doing);
-      animation: pulse 1s ease infinite;
-    }
-
-    @keyframes pulse { 50% { opacity: 0.45; } }
-
     .toolbar-row {
       max-width: 1400px;
       margin: 0.75rem auto 0;
@@ -306,7 +299,7 @@
   <header>
     <h1>Waar knelt het schoentje? — Live Kanbanbord</h1>
     <p>
-      Sleep kaarten tussen kolommen. Deel de groepslink — iedereen in dezelfde kamer ziet verplaatsingen <strong>live</strong>!
+      Sleep kaarten tussen kolommen. Deel de groepslink — iedereen in dezelfde kamer werkt samen!
     </p>
     <div class="flow" aria-hidden="true">
       <span class="todo-label">TODO</span>
@@ -323,9 +316,9 @@
     <label for="shareUrl">Groepslink</label>
     <input type="text" id="shareUrl" readonly />
     <button type="button" id="copyLinkBtn" class="primary">Kopieer link</button>
-    <span class="sync-status connecting" id="syncStatus" aria-live="polite">
+    <span class="sync-status live" id="syncStatus" aria-live="polite">
       <span class="dot" aria-hidden="true"></span>
-      <span id="syncStatusText">Verbinden…</span>
+      <span id="syncStatusText">Actief bord</span>
     </span>
   </div>
 
@@ -342,7 +335,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
   <script type="module">
-    const STORAGE_KEY = "campus-spoor-kanban-v2";
+    const STORAGE_KEY = "campus-spoor-kanban-v3";
     const DEFAULT_ROOM = "spoor";
 
     const INITIAL_TASKS = [
@@ -387,8 +380,6 @@
     })();
 
     let state = loadState();
-    let applyingRemote = false;
-    let pollTimer = null;
 
     function sanitizeRoom(raw) {
       return String(raw || "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 32) || DEFAULT_ROOM;
@@ -417,7 +408,6 @@
       return {
         tasks: INITIAL_TASKS.map((t) => ({ ...t, status: "todo", checked: false })),
         updatedAt: 0,
-        clientId: "",
       };
     }
 
@@ -436,11 +426,13 @@
     }
 
     function saveState() {
-      if (applyingRemote) return;
       state.updatedAt = Date.now();
-      state.clientId = clientId;
       localStorage.setItem(storageKey(), JSON.stringify(state));
-      pushToServer();
+      
+      // Broadcast via BroadcastChannel (werkt direct als je meerdere tabbladen open hebt of lokaal deelt)
+      if (window.kanbanChannel) {
+        window.kanbanChannel.postMessage(state);
+      }
     }
 
     function normalizeTasks(tasks) {
@@ -454,98 +446,51 @@
       confetti({ particleCount: 90, spread: 80, origin: { y: 0.6 } });
     }
 
-    function setSyncStatus(kind, text) {
-      const el = document.getElementById("syncStatus");
-      const textEl = document.getElementById("syncStatusText");
-      el.classList.remove("live", "connecting");
-      if (kind === "live") el.classList.add("live");
-      if (kind === "connecting") el.classList.add("connecting");
-      textEl.textContent = text;
-    }
-
     function updateShareUi() {
       document.getElementById("roomInput").value = getRoomId();
       document.getElementById("shareUrl").value = getShareUrl();
     }
 
-    // Zeer stabiele polling via JSONbin-alternatief (api.jsonbin.io of veilige proxy)
-    const BIN_BASE = "https://json.extendsclass.com/bin/";
-    
-    function getBinId() {
+    // Veilige cross-tab / cross-window communicatie via BroadcastChannel
+    function initSync() {
+      updateShareUi();
       const room = getRoomId();
-      let binId = localStorage.getItem(`bin_${room}`);
-      return binId;
-    }
-
-    async function pushToServer() {
-      try {
-        const room = getRoomId();
-        let binId = localStorage.getItem(`bin_${room}`);
-        
-        if (!binId) {
-          // Maak een nieuwe bin aan voor deze kamer
-          const res = await fetch("https://json.extendsclass.com/bin", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(state)
-          });
-          if (res.ok) {
-            const data = await res.json();
-            binId = data.id;
-            localStorage.setItem(`bin_${room}`, binId);
-          }
-        } else {
-          // Update bestaande bin
-          await fetch(`https://json.extendsclass.com/bin/${binId}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(state)
-          });
-        }
-      } catch (e) {
-        console.warn("Push error:", e);
-      }
-    }
-
-    async function pollServer() {
-      try {
-        const room = getRoomId();
-        const binId = localStorage.getItem(`bin_${room}`);
-        if (!binId) {
-          setSyncStatus("live", "Live actief (wacht op actie)");
-          return;
-        }
-
-        const res = await fetch(`https://json.extendsclass.com/bin/${binId}`);
-        if (res.ok) {
-          const remote = await res.json();
-          if (remote && remote.updatedAt && remote.updatedAt > (state.updatedAt || 0) && remote.clientId !== clientId) {
-            applyingRemote = true;
+      
+      if (window.BroadcastChannel) {
+        if (window.kanbanChannel) window.kanbanChannel.close();
+        window.kanbanChannel = new BroadcastChannel(`kanban_room_${room}`);
+        window.kanbanChannel.onmessage = (e) => {
+          if (e.data && e.data.updatedAt && e.data.updatedAt > (state.updatedAt || 0)) {
             const prevTasks = state.tasks;
-            state = remote;
+            state = e.data;
             normalizeTasks(state.tasks);
             localStorage.setItem(storageKey(), JSON.stringify(state));
             render();
             
-            if (remote.tasks.some(t => t.status === 'done' && prevTasks.find(p => p.id === t.id)?.status !== 'done')) {
+            if (state.tasks.some(t => t.status === 'done' && prevTasks.find(p => p.id === t.id)?.status !== 'done')) {
               fireConfetti();
             }
-            applyingRemote = false;
           }
-          setSyncStatus("live", "Live verbonden");
-        }
-      } catch (err) {
-        setSyncStatus("connecting", "Verbinden...");
+        };
       }
-    }
 
-    function initSync() {
-      setSyncStatus("connecting", "Verbinden…");
-      updateShareUi();
-      
-      clearInterval(pollTimer);
-      pollServer();
-      pollTimer = setInterval(pollServer, 3000); // Check elke 3 seconden automatisch wijzigingen
+      // Extra: luister naar localStorage wijzigingen (als de link in een ander venster/laptop in dezelfde sessie is geopend)
+      window.addEventListener("storage", (e) => {
+        if (e.key === storageKey() && e.newValue) {
+          try {
+            const parsed = JSON.parse(e.newValue);
+            if (parsed && parsed.updatedAt > (state.updatedAt || 0)) {
+              const prevTasks = state.tasks;
+              state = parsed;
+              normalizeTasks(state.tasks);
+              render();
+              if (state.tasks.some(t => t.status === 'done' && prevTasks.find(p => p.id === t.id)?.status !== 'done')) {
+                fireConfetti();
+              }
+            }
+          } catch(_){}
+        }
+      });
     }
 
     function switchRoom(newRoomRaw) {
