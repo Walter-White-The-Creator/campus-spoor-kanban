@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kanban — Waar knelt het schoentje?</title>
+  <style>
+    :root {
+      --bg: #f0f4f8;
+      --surface: #ffffff;
+      --text: #1a2332;
+      --muted: #5c6b7f;
+      --todo: #3b82f6;
+      --doing: #f59e0b;
+      --done: #10b981;
+      --border: #e2e8f0;
+      --shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+      --radius: 12px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: linear-gradient(160deg, #e8f0fe 0%, var(--bg) 40%, #f8fafc 100%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      padding: 1.5rem 1.25rem 0.75rem;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    header h1 {
+      margin: 0 0 0.35rem;
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+
+    header p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
+    .flow {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 1rem;
+      font-weight: 600;
+      font-size: 0.85rem;
+      letter-spacing: 0.02em;
+    }
+
+    .flow span {
+      padding: 0.25rem 0.65rem;
+      border-radius: 999px;
+      color: #fff;
+    }
+
+    .flow .todo-label { background: var(--todo); }
+    .flow .doing-label { background: var(--doing); }
+    .flow .done-label { background: var(--done); }
+
+    .toolbar {
+      max-width: 1400px;
+      margin: 0.75rem auto 0;
+      padding: 0 1.25rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .toolbar button {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      padding: 0.45rem 0.85rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.875rem;
+    }
+
+    .toolbar button:hover {
+      background: #f8fafc;
+    }
+
+    .stats {
+      margin-left: auto;
+      font-size: 0.875rem;
+      color: var(--muted);
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      padding: 1.25rem;
+      max-width: 1400px;
+      margin: 0 auto 2rem;
+      min-height: 60vh;
+    }
+
+    @media (max-width: 900px) {
+      .board {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .column {
+      background: rgba(255, 255, 255, 0.65);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      display: flex;
+      flex-direction: column;
+      min-height: 200px;
+    }
+
+    .column-header {
+      padding: 0.85rem 1rem;
+      border-bottom: 3px solid;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 700;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .column[data-status="todo"] .column-header { border-color: var(--todo); color: var(--todo); }
+    .column[data-status="doing"] .column-header { border-color: var(--doing); color: #b45309; }
+    .column[data-status="done"] .column-header { border-color: var(--done); color: #047857; }
+
+    .count {
+      background: #f1f5f9;
+      color: var(--muted);
+      font-size: 0.75rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+
+    .cards {
+      padding: 0.75rem;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+      min-height: 120px;
+    }
+
+    .cards.drag-over {
+      background: rgba(59, 130, 246, 0.06);
+      outline: 2px dashed var(--todo);
+      outline-offset: -4px;
+      border-radius: 0 0 var(--radius) var(--radius);
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.75rem 0.85rem;
+      box-shadow: var(--shadow);
+      cursor: grab;
+      transition: transform 0.15s, opacity 0.15s;
+    }
+
+    .card:active {
+      cursor: grabbing;
+    }
+
+    .card.dragging {
+      opacity: 0.45;
+      transform: scale(0.98);
+    }
+
+    .card.done-checked {
+      opacity: 0.75;
+    }
+
+    .card.done-checked .card-title {
+      text-decoration: line-through;
+      color: var(--muted);
+    }
+
+    .card-top {
+      display: flex;
+      gap: 0.5rem;
+      align-items: flex-start;
+    }
+
+    .card input[type="checkbox"] {
+      margin-top: 0.2rem;
+      width: 1.1rem;
+      height: 1.1rem;
+      accent-color: var(--done);
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+
+    .card-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .card-category {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: var(--muted);
+      margin-bottom: 0.25rem;
+    }
+
+    .card-title {
+      font-size: 0.875rem;
+      line-height: 1.45;
+      margin: 0;
+    }
+
+    .card-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-top: 0.65rem;
+    }
+
+    .card-actions button {
+      font-size: 0.7rem;
+      padding: 0.2rem 0.45rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: #f8fafc;
+      cursor: pointer;
+      color: var(--muted);
+    }
+
+    .card-actions button:hover {
+      background: #eef2ff;
+      color: var(--todo);
+      border-color: #c7d2fe;
+    }
+
+    footer {
+      text-align: center;
+      padding: 0 1rem 1.5rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Waar knelt het schoentje? — Kanbanbord</h1>
+    <p>
+      Sleep kaarten tussen kolommen of gebruik de pijltjes. Vink af in <strong>DONE</strong> wanneer een punt echt af is.
+      Voortgang wordt lokaal opgeslagen in je browser.
+    </p>
+    <div class="flow" aria-hidden="true">
+      <span class="todo-label">TODO</span>
+      <span>→</span>
+      <span class="doing-label">DOING</span>
+      <span>→</span>
+      <span class="done-label">DONE</span>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <button type="button" id="resetBtn">Alles terug naar TODO</button>
+    <span class="stats" id="stats"></span>
+  </div>
+
+  <main class="board" id="board"></main>
+
+  <footer>
+    Bron: waar_knelt_het_schoentje.txt — Campus Het Spoor website-backlog
+  </footer>
+
+  <script>
+    const STORAGE_KEY = "campus-spoor-kanban-v1";
+
+    const INITIAL_TASKS = [
+      { id: "1-1", category: "1. Beheer en gebruiksvriendelijkheid", title: "Simpeler beheer met drag-and-drop; minder ingewikkeld systeem" },
+      { id: "1-2", category: "1. Beheer en gebruiksvriendelijkheid", title: "Onderhoudsvriendelijk voor beheerders, eenvoudige updates" },
+      { id: "1-3", category: "1. Beheer en gebruiksvriendelijkheid", title: "Platform en toepassingen budgetvriendelijk houden" },
+      { id: "2-1", category: "2. Design, layout en schermresoluties", title: "Responsiviteit: GSM, tablet en laptop automatisch laten meeschalen" },
+      { id: "2-2", category: "2. Design, layout en schermresoluties", title: "Moderne, aantrekkelijke uitstraling (jong, professioneel voor ouders)" },
+      { id: "2-3", category: "2. Design, layout en schermresoluties", title: "Huisstijl: teksten en elementen in officiële schoolkleuren" },
+      { id: "2-4", category: "2. Design, layout en schermresoluties", title: "Overzichtelijkere navigatie en structuur (o.a. richtingen)" },
+      { id: "2-5", category: "2. Design, layout en schermresoluties", title: "Visuele afwerking: contrasten, homepage, gestylde Google Maps" },
+      { id: "3-1", category: "3. Visie, sfeer en content", title: "Pedagogische visie duidelijker, met Campus Het Spoor-identiteit" },
+      { id: "3-2", category: "3. Visie, sfeer en content", title: "Sfeer en eerste indruk: school laten leven, interactieve beleving" },
+      { id: "3-3", category: "3. Visie, sfeer en content", title: "Kernwaarden visueel uitbeelden (eigentijds leren, zelfstandigheid, samen, betrokken)" },
+      { id: "3-4", category: "3. Visie, sfeer en content", title: "Alleen passende, actuele schoolfoto's — geen willekeurige stock" },
+      { id: "3-5", category: "3. Visie, sfeer en content", title: "Klikbare foto's met extra informatie" },
+      { id: "4-1", category: "4. Studierichtingen en interactief spoor", title: "Overzicht graden, richtingen en lessentabellen begrijpelijker en visueler" },
+      { id: "4-2", category: "4. Studierichtingen en interactief spoor", title: "Interactieve roadmap / visueel spoor voor studiepad" },
+      { id: "4-3", category: "4. Studierichtingen en interactief spoor", title: "Spoorthema verder uitdiepen in interactieve onderdelen" },
+      { id: "5-1", category: "5. Schoolteam en contact", title: "Introductie van het schoolteam op de contactpagina" },
+      { id: "5-2", category: "5. Schoolteam en contact", title: "Transparante teamstructuur (groepen, vakken, leerkrachten)" },
+      { id: "5-3", category: "5. Schoolteam en contact", title: "Duidelijke contactgegevens en sociale media" },
+      { id: "6-1", category: "6. AI chatbot, mascot en zoekfunctie", title: "AI-chatbot subtiel (niet oppoppen, geen half scherm)" },
+      { id: "6-2", category: "6. AI chatbot, mascot en zoekfunctie", title: "Mascot/emoji/schoolrobot koppelen aan chatbot" },
+      { id: "6-3", category: "6. AI chatbot, mascot en zoekfunctie", title: "FAQ, schoolreglement en inschrijving in chatbot-kennisbank" },
+      { id: "6-4", category: "6. AI chatbot, mascot en zoekfunctie", title: "Logging gesprekken + e-mail fallback bij onbeantwoorde vragen" },
+      { id: "6-5", category: "6. AI chatbot, mascot en zoekfunctie", title: "Duidelijke zoekbalk op de website" },
+      { id: "7-1", category: "7. Veiligheid, juridisch, formulieren", title: "Beveiliging verbeteren; geen open admin-panels; minder host-afhankelijkheid" },
+      { id: "7-2", category: "7. Veiligheid, juridisch, formulieren", title: "Volledige rechten op foto's en content (copyright)" },
+      { id: "7-3", category: "7. Veiligheid, juridisch, formulieren", title: "Subtiele cookie- en privacyweergave" },
+      { id: "7-4", category: "7. Veiligheid, juridisch, formulieren", title: "Google Bedrijfsprofiel claimen; Maps-foto's en reviews" },
+      { id: "7-5", category: "7. Veiligheid, juridisch, formulieren", title: "Sollicitaties/vacatures: toestemming directie bij proceswijziging; formulieren naar directie" },
+    ];
+
+    const STATUSES = ["todo", "doing", "done"];
+    const LABELS = { todo: "Todo", doing: "Doing", done: "Done" };
+
+    let state = loadState();
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed.tasks) && parsed.tasks.length) return parsed;
+        }
+      } catch (_) {}
+      return {
+        tasks: INITIAL_TASKS.map((t) => ({ ...t, status: "todo", checked: false })),
+      };
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function moveTask(id, direction) {
+      const task = state.tasks.find((t) => t.id === id);
+      if (!task) return;
+      const idx = STATUSES.indexOf(task.status);
+      const next = idx + direction;
+      if (next < 0 || next >= STATUSES.length) return;
+      task.status = STATUSES[next];
+      if (task.status !== "done") task.checked = false;
+      saveState();
+      render();
+    }
+
+    function setStatus(id, status) {
+      const task = state.tasks.find((t) => t.id === id);
+      if (!task || task.status === status) return;
+      task.status = status;
+      if (status !== "done") task.checked = false;
+      saveState();
+      render();
+    }
+
+    function toggleChecked(id, checked) {
+      const task = state.tasks.find((t) => t.id === id);
+      if (!task) return;
+      task.checked = checked;
+      if (checked && task.status !== "done") task.status = "done";
+      saveState();
+      render();
+    }
+
+    function updateStats() {
+      const total = state.tasks.length;
+      const doneChecked = state.tasks.filter((t) => t.checked).length;
+      const inDone = state.tasks.filter((t) => t.status === "done").length;
+      document.getElementById("stats").textContent =
+        `${doneChecked} afgevinkt · ${inDone} in Done · ${total} totaal`;
+    }
+
+    function renderCard(task) {
+      const card = document.createElement("article");
+      card.className = "card" + (task.checked ? " done-checked" : "");
+      card.draggable = true;
+      card.dataset.id = task.id;
+
+      card.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData("text/plain", task.id);
+        card.classList.add("dragging");
+      });
+      card.addEventListener("dragend", () => card.classList.remove("dragging"));
+
+      const top = document.createElement("div");
+      top.className = "card-top";
+
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = task.checked;
+      checkbox.title = "Taak afvinken";
+      checkbox.addEventListener("change", () => toggleChecked(task.id, checkbox.checked));
+
+      const body = document.createElement("div");
+      body.className = "card-body";
+      body.innerHTML =
+        `<div class="card-category">${escapeHtml(task.category)}</div>` +
+        `<p class="card-title">${escapeHtml(task.title)}</p>`;
+
+      top.appendChild(checkbox);
+      top.appendChild(body);
+      card.appendChild(top);
+
+      const actions = document.createElement("div");
+      actions.className = "card-actions";
+
+      if (task.status !== "todo") {
+        const back = document.createElement("button");
+        back.type = "button";
+        back.textContent = "← Terug";
+        back.addEventListener("click", () => moveTask(task.id, -1));
+        actions.appendChild(back);
+      }
+      if (task.status !== "done") {
+        const fwd = document.createElement("button");
+        fwd.type = "button";
+        fwd.textContent = "Volgende →";
+        fwd.addEventListener("click", () => moveTask(task.id, 1));
+        actions.appendChild(fwd);
+      }
+
+      card.appendChild(actions);
+      return card;
+    }
+
+    function escapeHtml(s) {
+      return s
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function render() {
+      const board = document.getElementById("board");
+      board.innerHTML = "";
+
+      STATUSES.forEach((status) => {
+        const col = document.createElement("section");
+        col.className = "column";
+        col.dataset.status = status;
+
+        const tasksHere = state.tasks.filter((t) => t.status === status);
+
+        col.innerHTML =
+          `<div class="column-header"><span>${LABELS[status]}</span>` +
+          `<span class="count">${tasksHere.length}</span></div>`;
+
+        const cards = document.createElement("div");
+        cards.className = "cards";
+        cards.dataset.status = status;
+
+        cards.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          cards.classList.add("drag-over");
+        });
+        cards.addEventListener("dragleave", () => cards.classList.remove("drag-over"));
+        cards.addEventListener("drop", (e) => {
+          e.preventDefault();
+          cards.classList.remove("drag-over");
+          const id = e.dataTransfer.getData("text/plain");
+          setStatus(id, status);
+        });
+
+        tasksHere.forEach((t) => cards.appendChild(renderCard(t)));
+        col.appendChild(cards);
+        board.appendChild(col);
+      });
+
+      updateStats();
+    }
+
+    document.getElementById("resetBtn").addEventListener("click", () => {
+      if (!confirm("Alle kaarten terug naar TODO en vinkjes wissen?")) return;
+      state = {
+        tasks: INITIAL_TASKS.map((t) => ({ ...t, status: "todo", checked: false })),
+      };
+      saveState();
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>
