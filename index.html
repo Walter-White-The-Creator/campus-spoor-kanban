@@ -69,34 +69,6 @@
     .flow .doing-label { background: var(--doing); }
     .flow .done-label { background: var(--done); }
 
-    .toolbar {
-      max-width: 1400px;
-      margin: 0.75rem auto 0;
-      padding: 0 1.25rem;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.75rem;
-      align-items: center;
-    }
-
-    .toolbar button {
-      border: 1px solid var(--border);
-      background: var(--surface);
-      padding: 0.45rem 0.85rem;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 0.875rem;
-    }
-
-    .toolbar button:hover {
-      background: #f8fafc;
-    }
-
-    .stats {
-      font-size: 0.875rem;
-      color: var(--muted);
-    }
-
     .share-bar {
       max-width: 1400px;
       margin: 0.5rem auto 0;
@@ -136,6 +108,7 @@
       background: var(--todo);
       color: #fff;
       border-color: var(--todo);
+      cursor: pointer;
     }
 
     .share-bar button.primary:hover {
@@ -182,6 +155,20 @@
       flex-wrap: wrap;
       gap: 0.75rem;
       align-items: center;
+    }
+
+    .toolbar-row button {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      padding: 0.45rem 0.85rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.875rem;
+    }
+
+    .stats {
+      font-size: 0.875rem;
+      color: var(--muted);
     }
 
     .board {
@@ -348,8 +335,7 @@
   <header>
     <h1>Waar knelt het schoentje? — Kanbanbord</h1>
     <p>
-      Sleep kaarten tussen kolommen of gebruik de pijltjes. Vink af in <strong>DONE</strong> wanneer een punt echt af is.
-      Deel de groepslink — iedereen in dezelfde kamer ziet verplaatsingen live.
+      Sleep kaarten tussen kolommen of gebruik de pijltjes. Deel de groepslink — iedereen in dezelfde kamer ziet verplaatsingen live!
     </p>
     <div class="flow" aria-hidden="true">
       <span class="todo-label">TODO</span>
@@ -436,9 +422,7 @@
     let applyingRemote = false;
     let syncPushTimer = null;
     let syncMode = "local";
-    /** @type {import('firebase/database').Unsubscribe | null} */
     let firebaseUnsub = null;
-    /** @type {import('y-webrtc').WebrtcProvider | null} */
     let webrtcProvider = null;
 
     function sanitizeRoom(raw) {
@@ -719,6 +703,10 @@
         if (task.status !== "done") {
           task.status = "done";
           if (!wasCompleted) fireConfetti();
+        }
+      } else {
+        if (task.status === "done") {
+          task.status = "doing";
         }
       }
       saveState();
