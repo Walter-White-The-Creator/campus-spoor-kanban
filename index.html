@@ -18,9 +18,7 @@
       --radius: 12px;
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
@@ -56,7 +54,6 @@
       margin-top: 1rem;
       font-weight: 600;
       font-size: 0.85rem;
-      letter-spacing: 0.02em;
     }
 
     .flow span {
@@ -109,11 +106,12 @@
       color: #fff;
       border-color: var(--todo);
       cursor: pointer;
+      padding: 0.45rem 0.85rem;
+      border-radius: 8px;
+      border: none;
     }
 
-    .share-bar button.primary:hover {
-      background: #2563eb;
-    }
+    .share-bar button.primary:hover { background: #2563eb; }
 
     .sync-status {
       display: inline-flex;
@@ -143,9 +141,7 @@
       animation: pulse 1s ease infinite;
     }
 
-    @keyframes pulse {
-      50% { opacity: 0.45; }
-    }
+    @keyframes pulse { 50% { opacity: 0.45; } }
 
     .toolbar-row {
       max-width: 1400px;
@@ -166,9 +162,7 @@
       font-size: 0.875rem;
     }
 
-    .toolbar-row button:hover {
-      background: #f8fafc;
-    }
+    .toolbar-row button:hover { background: #f8fafc; }
 
     .stats {
       font-size: 0.875rem;
@@ -186,9 +180,7 @@
     }
 
     @media (max-width: 900px) {
-      .board {
-        grid-template-columns: 1fr;
-      }
+      .board { grid-template-columns: 1fr; }
     }
 
     .column {
@@ -209,7 +201,6 @@
       font-weight: 700;
       font-size: 0.9rem;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
     }
 
     .column[data-status="todo"] .column-header { border-color: var(--todo); color: var(--todo); }
@@ -251,29 +242,12 @@
       transition: transform 0.15s, opacity 0.15s;
     }
 
-    .card:active {
-      cursor: grabbing;
-    }
+    .card:active { cursor: grabbing; }
+    .card.dragging { opacity: 0.45; transform: scale(0.98); }
+    .card.done-checked { opacity: 0.75; }
+    .card.done-checked .card-title { text-decoration: line-through; color: var(--muted); }
 
-    .card.dragging {
-      opacity: 0.45;
-      transform: scale(0.98);
-    }
-
-    .card.done-checked {
-      opacity: 0.75;
-    }
-
-    .card.done-checked .card-title {
-      text-decoration: line-through;
-      color: var(--muted);
-    }
-
-    .card-top {
-      display: flex;
-      gap: 0.5rem;
-      align-items: flex-start;
-    }
+    .card-top { display: flex; gap: 0.5rem; align-items: flex-start; }
 
     .card input[type="checkbox"] {
       margin-top: 0.2rem;
@@ -284,10 +258,7 @@
       cursor: pointer;
     }
 
-    .card-body {
-      flex: 1;
-      min-width: 0;
-    }
+    .card-body { flex: 1; min-width: 0; }
 
     .card-category {
       font-size: 0.7rem;
@@ -298,11 +269,7 @@
       margin-bottom: 0.25rem;
     }
 
-    .card-title {
-      font-size: 0.875rem;
-      line-height: 1.45;
-      margin: 0;
-    }
+    .card-title { font-size: 0.875rem; line-height: 1.45; margin: 0; }
 
     .card-actions {
       display: flex;
@@ -339,7 +306,7 @@
   <header>
     <h1>Waar knelt het schoentje? — Live Kanbanbord</h1>
     <p>
-      Sleep kaarten tussen kolommen of gebruik de pijltjes. Deel de groepslink — iedereen in dezelfde kamer ziet verplaatsingen <strong>meteen live</strong>!
+      Sleep kaarten tussen kolommen. Deel de groepslink — iedereen in dezelfde kamer ziet verplaatsingen <strong>live</strong>!
     </p>
     <div class="flow" aria-hidden="true">
       <span class="todo-label">TODO</span>
@@ -352,7 +319,7 @@
 
   <div class="share-bar" id="shareBar">
     <label for="roomInput">Kamer</label>
-    <input type="text" id="roomInput" class="room-input" maxlength="32" autocomplete="off" spellcheck="false" title="Zelfde kamer = zelfde bord" />
+    <input type="text" id="roomInput" class="room-input" maxlength="32" autocomplete="off" spellcheck="false" />
     <label for="shareUrl">Groepslink</label>
     <input type="text" id="shareUrl" readonly />
     <button type="button" id="copyLinkBtn" class="primary">Kopieer link</button>
@@ -370,12 +337,12 @@
   <main class="board" id="board"></main>
 
   <footer>
-    Bron: waar_knelt_het_schoentje.txt — Campus Het Spoor website-backlog
+    Campus Het Spoor website-backlog
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
   <script type="module">
-    const STORAGE_KEY = "campus-spoor-kanban-v1";
+    const STORAGE_KEY = "campus-spoor-kanban-v2";
     const DEFAULT_ROOM = "spoor";
 
     const INITIAL_TASKS = [
@@ -421,6 +388,7 @@
 
     let state = loadState();
     let applyingRemote = false;
+    let pollTimer = null;
 
     function sanitizeRoom(raw) {
       return String(raw || "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 32) || DEFAULT_ROOM;
@@ -472,7 +440,7 @@
       state.updatedAt = Date.now();
       state.clientId = clientId;
       localStorage.setItem(storageKey(), JSON.stringify(state));
-      syncPush();
+      pushToServer();
     }
 
     function normalizeTasks(tasks) {
@@ -500,60 +468,84 @@
       document.getElementById("shareUrl").value = getShareUrl();
     }
 
-    async function syncPush() {
+    // Zeer stabiele polling via JSONbin-alternatief (api.jsonbin.io of veilige proxy)
+    const BIN_BASE = "https://json.extendsclass.com/bin/";
+    
+    function getBinId() {
+      const room = getRoomId();
+      let binId = localStorage.getItem(`bin_${room}`);
+      return binId;
+    }
+
+    async function pushToServer() {
       try {
         const room = getRoomId();
-        await fetch(`https://ntfy.sh/spoor_kanban_room_${room}`, {
-          method: "POST",
-          body: JSON.stringify(state),
-        });
+        let binId = localStorage.getItem(`bin_${room}`);
+        
+        if (!binId) {
+          // Maak een nieuwe bin aan voor deze kamer
+          const res = await fetch("https://json.extendsclass.com/bin", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(state)
+          });
+          if (res.ok) {
+            const data = await res.json();
+            binId = data.id;
+            localStorage.setItem(`bin_${room}`, binId);
+          }
+        } else {
+          // Update bestaande bin
+          await fetch(`https://json.extendsclass.com/bin/${binId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(state)
+          });
+        }
       } catch (e) {
-        console.warn("Sync error:", e);
+        console.warn("Push error:", e);
+      }
+    }
+
+    async function pollServer() {
+      try {
+        const room = getRoomId();
+        const binId = localStorage.getItem(`bin_${room}`);
+        if (!binId) {
+          setSyncStatus("live", "Live actief (wacht op actie)");
+          return;
+        }
+
+        const res = await fetch(`https://json.extendsclass.com/bin/${binId}`);
+        if (res.ok) {
+          const remote = await res.json();
+          if (remote && remote.updatedAt && remote.updatedAt > (state.updatedAt || 0) && remote.clientId !== clientId) {
+            applyingRemote = true;
+            const prevTasks = state.tasks;
+            state = remote;
+            normalizeTasks(state.tasks);
+            localStorage.setItem(storageKey(), JSON.stringify(state));
+            render();
+            
+            if (remote.tasks.some(t => t.status === 'done' && prevTasks.find(p => p.id === t.id)?.status !== 'done')) {
+              fireConfetti();
+            }
+            applyingRemote = false;
+          }
+          setSyncStatus("live", "Live verbonden");
+        }
+      } catch (err) {
+        setSyncStatus("connecting", "Verbinden...");
       }
     }
 
     function initSync() {
-      setSyncStatus("connecting", "Samenwerken verbinden…");
+      setSyncStatus("connecting", "Verbinden…");
       updateShareUi();
-
-      const room = getRoomId();
       
-      if (window.EventSource) {
-        if (window.currentSSE) window.currentSSE.close();
-
-        const sse = new EventSource(`https://ntfy.sh/spoor_kanban_room_${room}/sse`);
-        window.currentSSE = sse;
-
-        sse.onopen = () => {
-          setSyncStatus("live", "Live samenwerken actief");
-        };
-
-        sse.onmessage = (e) => {
-          try {
-            const data = JSON.parse(e.data);
-            if (data && data.message) {
-              const remote = JSON.parse(data.message);
-              if (remote && remote.updatedAt > (state.updatedAt || 0) && remote.clientId !== clientId) {
-                applyingRemote = true;
-                const prevTasks = state.tasks;
-                state = remote;
-                normalizeTasks(state.tasks);
-                localStorage.setItem(storageKey(), JSON.stringify(state));
-                render();
-                
-                if (remote.tasks.some(t => t.status === 'done' && prevTasks.find(p => p.id === t.id)?.status !== 'done')) {
-                  fireConfetti();
-                }
-                applyingRemote = false;
-              }
-            }
-          } catch (_) {}
-        };
-
-        sse.onerror = () => {
-          setSyncStatus("connecting", "Opnieuw verbinden…");
-        };
-      }
+      clearInterval(pollTimer);
+      pollServer();
+      pollTimer = setInterval(pollServer, 3000); // Check elke 3 seconden automatisch wijzigingen
     }
 
     function switchRoom(newRoomRaw) {
