@@ -7,7 +7,7 @@ Set-Location $PSScriptRoot
 gh auth status | Out-Null
 
 $repoName = "campus-spoor-kanban"
-$existing = git remote get-url origin 2>$null
+$existing = git remote 2>$null | Select-String -Pattern "^origin$"
 if (-not $existing) {
   gh repo create $repoName --public --source=. --remote=origin --description "Kanbanbord Waar knelt het schoentje - Campus Het Spoor"
   git push -u origin main
