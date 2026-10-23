@@ -2,7 +2,7 @@
 
 Kanbanbord (TODO → DOING → DONE) voor de backlog uit *Waar knelt het schoentje?* — website Campus Het Spoor.
 
-## Live site
+## Live site link = https://walter-white-the-creator.github.io/campus-spoor-kanban/?room=spoor
 
 **Groepslink (deel met je team):**
 
