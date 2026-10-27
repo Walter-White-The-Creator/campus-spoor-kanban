@@ -18,7 +18,9 @@
       --radius: 12px;
     }
 
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
 
     body {
       margin: 0;
@@ -54,6 +56,7 @@
       margin-top: 1rem;
       font-weight: 600;
       font-size: 0.85rem;
+      letter-spacing: 0.02em;
     }
 
     .flow span {
@@ -65,6 +68,34 @@
     .flow .todo-label { background: var(--todo); }
     .flow .doing-label { background: var(--doing); }
     .flow .done-label { background: var(--done); }
+
+    .toolbar {
+      max-width: 1400px;
+      margin: 0.75rem auto 0;
+      padding: 0 1.25rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .toolbar button {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      padding: 0.45rem 0.85rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.875rem;
+    }
+
+    .toolbar button:hover {
+      background: #f8fafc;
+    }
+
+    .stats {
+      font-size: 0.875rem;
+      color: var(--muted);
+    }
 
     .share-bar {
       max-width: 1400px;
@@ -105,13 +136,11 @@
       background: var(--todo);
       color: #fff;
       border-color: var(--todo);
-      cursor: pointer;
-      padding: 0.45rem 0.85rem;
-      border-radius: 8px;
-      border: none;
     }
 
-    .share-bar button.primary:hover { background: #2563eb; }
+    .share-bar button.primary:hover {
+      background: #2563eb;
+    }
 
     .sync-status {
       display: inline-flex;
@@ -136,6 +165,15 @@
       box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.35);
     }
 
+    .sync-status.connecting .dot {
+      background: var(--doing);
+      animation: pulse 1s ease infinite;
+    }
+
+    @keyframes pulse {
+      50% { opacity: 0.45; }
+    }
+
     .toolbar-row {
       max-width: 1400px;
       margin: 0.75rem auto 0;
@@ -144,22 +182,6 @@
       flex-wrap: wrap;
       gap: 0.75rem;
       align-items: center;
-    }
-
-    .toolbar-row button {
-      border: 1px solid var(--border);
-      background: var(--surface);
-      padding: 0.45rem 0.85rem;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 0.875rem;
-    }
-
-    .toolbar-row button:hover { background: #f8fafc; }
-
-    .stats {
-      font-size: 0.875rem;
-      color: var(--muted);
     }
 
     .board {
@@ -173,7 +195,9 @@
     }
 
     @media (max-width: 900px) {
-      .board { grid-template-columns: 1fr; }
+      .board {
+        grid-template-columns: 1fr;
+      }
     }
 
     .column {
@@ -194,6 +218,7 @@
       font-weight: 700;
       font-size: 0.9rem;
       text-transform: uppercase;
+      letter-spacing: 0.04em;
     }
 
     .column[data-status="todo"] .column-header { border-color: var(--todo); color: var(--todo); }
@@ -235,12 +260,29 @@
       transition: transform 0.15s, opacity 0.15s;
     }
 
-    .card:active { cursor: grabbing; }
-    .card.dragging { opacity: 0.45; transform: scale(0.98); }
-    .card.done-checked { opacity: 0.75; }
-    .card.done-checked .card-title { text-decoration: line-through; color: var(--muted); }
+    .card:active {
+      cursor: grabbing;
+    }
 
-    .card-top { display: flex; gap: 0.5rem; align-items: flex-start; }
+    .card.dragging {
+      opacity: 0.45;
+      transform: scale(0.98);
+    }
+
+    .card.done-checked {
+      opacity: 0.75;
+    }
+
+    .card.done-checked .card-title {
+      text-decoration: line-through;
+      color: var(--muted);
+    }
+
+    .card-top {
+      display: flex;
+      gap: 0.5rem;
+      align-items: flex-start;
+    }
 
     .card input[type="checkbox"] {
       margin-top: 0.2rem;
@@ -251,7 +293,10 @@
       cursor: pointer;
     }
 
-    .card-body { flex: 1; min-width: 0; }
+    .card-body {
+      flex: 1;
+      min-width: 0;
+    }
 
     .card-category {
       font-size: 0.7rem;
@@ -262,7 +307,11 @@
       margin-bottom: 0.25rem;
     }
 
-    .card-title { font-size: 0.875rem; line-height: 1.45; margin: 0; }
+    .card-title {
+      font-size: 0.875rem;
+      line-height: 1.45;
+      margin: 0;
+    }
 
     .card-actions {
       display: flex;
@@ -297,9 +346,10 @@
 </head>
 <body>
   <header>
-    <h1>Waar knelt het schoentje? — Live Kanbanbord</h1>
+    <h1>Waar knelt het schoentje? — Kanbanbord</h1>
     <p>
-      Sleep kaarten tussen kolommen. Deel de groepslink — iedereen in dezelfde kamer werkt samen!
+      Sleep kaarten tussen kolommen of gebruik de pijltjes. Vink af in <strong>DONE</strong> wanneer een punt echt af is.
+      Deel de groepslink — iedereen in dezelfde kamer ziet verplaatsingen live.
     </p>
     <div class="flow" aria-hidden="true">
       <span class="todo-label">TODO</span>
@@ -312,13 +362,13 @@
 
   <div class="share-bar" id="shareBar">
     <label for="roomInput">Kamer</label>
-    <input type="text" id="roomInput" class="room-input" maxlength="32" autocomplete="off" spellcheck="false" />
+    <input type="text" id="roomInput" class="room-input" maxlength="32" autocomplete="off" spellcheck="false" title="Zelfde kamer = zelfde bord" />
     <label for="shareUrl">Groepslink</label>
     <input type="text" id="shareUrl" readonly />
     <button type="button" id="copyLinkBtn" class="primary">Kopieer link</button>
-    <span class="sync-status live" id="syncStatus" aria-live="polite">
+    <span class="sync-status connecting" id="syncStatus" aria-live="polite">
       <span class="dot" aria-hidden="true"></span>
-      <span id="syncStatusText">Actief bord</span>
+      <span id="syncStatusText">Verbinden…</span>
     </span>
   </div>
 
@@ -330,12 +380,13 @@
   <main class="board" id="board"></main>
 
   <footer>
-    Campus Het Spoor website-backlog
+    Bron: waar_knelt_het_schoentje.txt — Campus Het Spoor website-backlog
   </footer>
 
+  <script src="firebase-config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
   <script type="module">
-    const STORAGE_KEY = "campus-spoor-kanban-v3";
+    const STORAGE_KEY = "campus-spoor-kanban-v1";
     const DEFAULT_ROOM = "spoor";
 
     const INITIAL_TASKS = [
@@ -373,16 +424,30 @@
     const STATUSES = ["todo", "doing", "done"];
     const LABELS = { todo: "Todo", doing: "Doing", done: "Done" };
 
-    const clientId = sessionStorage.getItem("kanban-client-id") || (() => {
-      const id = crypto.randomUUID();
-      sessionStorage.setItem("kanban-client-id", id);
-      return id;
-    })();
+    const clientId =
+      sessionStorage.getItem("kanban-client-id") ||
+      (() => {
+        const id = crypto.randomUUID();
+        sessionStorage.setItem("kanban-client-id", id);
+        return id;
+      })();
 
     let state = loadState();
+    let applyingRemote = false;
+    let syncPushTimer = null;
+    let syncMode = "local";
+    /** @type {import('firebase/database').Unsubscribe | null} */
+    let firebaseUnsub = null;
+    /** @type {import('y-webrtc').WebrtcProvider | null} */
+    let webrtcProvider = null;
 
     function sanitizeRoom(raw) {
-      return String(raw || "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 32) || DEFAULT_ROOM;
+      const s = String(raw || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, "")
+        .slice(0, 32);
+      return s || DEFAULT_ROOM;
     }
 
     function getRoomId() {
@@ -393,11 +458,15 @@
     function setRoomInUrl(roomId) {
       const params = new URLSearchParams(location.search);
       params.set("room", roomId);
-      history.replaceState(null, "", `${location.pathname}?${params.toString()}`);
+      const next = `${location.pathname}?${params.toString()}`;
+      history.replaceState(null, "", next);
     }
 
     function getShareUrl() {
-      return `${location.origin}${location.pathname}?room=${getRoomId()}`;
+      const room = getRoomId();
+      const params = new URLSearchParams();
+      params.set("room", room);
+      return `${location.origin}${location.pathname}?${params.toString()}`;
     }
 
     function storageKey() {
@@ -408,6 +477,7 @@
       return {
         tasks: INITIAL_TASKS.map((t) => ({ ...t, status: "todo", checked: false })),
         updatedAt: 0,
+        clientId: "",
       };
     }
 
@@ -417,6 +487,7 @@
         if (raw) {
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed.tasks) && parsed.tasks.length) {
+            parsed.updatedAt = parsed.updatedAt || 0;
             normalizeTasks(parsed.tasks);
             return parsed;
           }
@@ -426,13 +497,16 @@
     }
 
     function saveState() {
+      if (applyingRemote) return;
       state.updatedAt = Date.now();
+      state.clientId = clientId;
       localStorage.setItem(storageKey(), JSON.stringify(state));
-      
-      // Broadcast via BroadcastChannel (werkt direct als je meerdere tabbladen open hebt of lokaal deelt)
-      if (window.kanbanChannel) {
-        window.kanbanChannel.postMessage(state);
-      }
+      scheduleSyncPush();
+    }
+
+    function scheduleSyncPush() {
+      clearTimeout(syncPushTimer);
+      syncPushTimer = setTimeout(pushStateToPeers, 120);
     }
 
     function normalizeTasks(tasks) {
@@ -443,7 +517,46 @@
 
     function fireConfetti() {
       if (typeof confetti !== "function") return;
-      confetti({ particleCount: 90, spread: 80, origin: { y: 0.6 } });
+      const n = 100;
+      const base = { origin: { y: 0.62 }, zIndex: 9999, colors: ["#3b82f6", "#f59e0b", "#10b981", "#ffffff"] };
+      confetti({ ...base, particleCount: n * 0.25, spread: 26, startVelocity: 55 });
+      confetti({ ...base, particleCount: n * 0.2, spread: 60 });
+      confetti({ ...base, particleCount: n * 0.35, spread: 100, decay: 0.91, scalar: 0.85 });
+      confetti({ ...base, particleCount: n * 0.2, spread: 120, startVelocity: 35 });
+    }
+
+    function detectNewlyCompleted(prevTasks, nextTasks) {
+      const prev = new Map(prevTasks.map((t) => [t.id, t.status]));
+      return nextTasks.some((t) => t.status === "done" && prev.get(t.id) !== "done");
+    }
+
+    function applyRemoteState(remote) {
+      if (!remote || !Array.isArray(remote.tasks)) return;
+      const remoteAt = remote.updatedAt || 0;
+      if (remoteAt < (state.updatedAt || 0)) return;
+      if (remoteAt === state.updatedAt && remote.clientId === state.clientId) return;
+      const prevTasks = state.tasks.map((t) => ({ id: t.id, status: t.status }));
+      applyingRemote = true;
+      state = {
+        tasks: remote.tasks,
+        updatedAt: remoteAt,
+        clientId: remote.clientId || "",
+      };
+      normalizeTasks(state.tasks);
+      const celebrate = detectNewlyCompleted(prevTasks, state.tasks);
+      localStorage.setItem(storageKey(), JSON.stringify(state));
+      render();
+      applyingRemote = false;
+      if (celebrate) fireConfetti();
+    }
+
+    function setSyncStatus(kind, text) {
+      const el = document.getElementById("syncStatus");
+      const textEl = document.getElementById("syncStatusText");
+      el.classList.remove("live", "connecting");
+      if (kind === "live") el.classList.add("live");
+      if (kind === "connecting") el.classList.add("connecting");
+      textEl.textContent = text;
     }
 
     function updateShareUi() {
@@ -451,63 +564,126 @@
       document.getElementById("shareUrl").value = getShareUrl();
     }
 
-    // Veilige cross-tab / cross-window communicatie via BroadcastChannel
-    function initSync() {
-      updateShareUi();
-      const room = getRoomId();
-      
-      if (window.BroadcastChannel) {
-        if (window.kanbanChannel) window.kanbanChannel.close();
-        window.kanbanChannel = new BroadcastChannel(`kanban_room_${room}`);
-        window.kanbanChannel.onmessage = (e) => {
-          if (e.data && e.data.updatedAt && e.data.updatedAt > (state.updatedAt || 0)) {
-            const prevTasks = state.tasks;
-            state = e.data;
-            normalizeTasks(state.tasks);
-            localStorage.setItem(storageKey(), JSON.stringify(state));
-            render();
-            
-            if (state.tasks.some(t => t.status === 'done' && prevTasks.find(p => p.id === t.id)?.status !== 'done')) {
-              fireConfetti();
-            }
-          }
-        };
+    async function pushStateToPeers() {
+      if (syncMode === "firebase" && firebaseDb) {
+        const { ref, set } = firebaseApi;
+        await set(ref(firebaseDb, `rooms/${getRoomId()}`), {
+          tasks: state.tasks,
+          updatedAt: state.updatedAt,
+          clientId: state.clientId,
+        });
+      } else if (syncMode === "webrtc" && yMap) {
+        yMap.set("payload", {
+          tasks: state.tasks,
+          updatedAt: state.updatedAt,
+          clientId: state.clientId,
+        });
       }
+    }
 
-      // Extra: luister naar localStorage wijzigingen (als de link in een ander venster/laptop in dezelfde sessie is geopend)
-      window.addEventListener("storage", (e) => {
-        if (e.key === storageKey() && e.newValue) {
-          try {
-            const parsed = JSON.parse(e.newValue);
-            if (parsed && parsed.updatedAt > (state.updatedAt || 0)) {
-              const prevTasks = state.tasks;
-              state = parsed;
-              normalizeTasks(state.tasks);
-              render();
-              if (state.tasks.some(t => t.status === 'done' && prevTasks.find(p => p.id === t.id)?.status !== 'done')) {
-                fireConfetti();
-              }
-            }
-          } catch(_){}
-        }
+    let firebaseDb = null;
+    let firebaseApi = null;
+    let yMap = null;
+
+    async function initFirebaseSync(cfg) {
+      firebaseApi = await import(
+        "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js"
+      );
+      const { initializeApp } = await import(
+        "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js"
+      );
+      const app = initializeApp(cfg);
+      firebaseDb = firebaseApi.getDatabase(app);
+      syncMode = "firebase";
+
+      const roomRef = firebaseApi.ref(firebaseDb, `rooms/${getRoomId()}`);
+      let seeded = false;
+      firebaseUnsub = firebaseApi.onValue(roomRef, (snap) => {
+        const val = snap.val();
+        if (val) applyRemoteState(val);
+        else if (!seeded) pushStateToPeers();
+        seeded = true;
+        setSyncStatus("live", "Live · Firebase");
       });
+    }
+
+    async function initWebRtcSync() {
+      const Y = await import("https://esm.sh/yjs@13.6.18");
+      const { WebrtcProvider } = await import("https://esm.sh/y-webrtc@10.3.0");
+
+      const ydoc = new Y.Doc();
+      const room = getRoomId();
+      webrtcProvider = new WebrtcProvider(room, ydoc, {
+        signaling: [
+          "wss://signaling.yjs.dev",
+          "wss://y-webrtc-eu.fly.dev",
+          "wss://y-webrtc-us.fly.dev",
+        ],
+      });
+      yMap = ydoc.getMap("kanban");
+      syncMode = "webrtc";
+
+      yMap.observe((event) => {
+        if (event.transaction.local) return;
+        const payload = yMap.get("payload");
+        if (payload) applyRemoteState(payload);
+      });
+
+      const updatePresence = () => {
+        const n = webrtcProvider.awareness.getStates().size;
+        setSyncStatus("live", n > 1 ? `Live · ${n} personen` : "Live · wacht op anderen");
+      };
+      webrtcProvider.awareness.on("change", updatePresence);
+      updatePresence();
+
+      const existing = yMap.get("payload");
+      if (existing && (existing.updatedAt || 0) > (state.updatedAt || 0)) {
+        applyRemoteState(existing);
+      } else {
+        await pushStateToPeers();
+      }
+    }
+
+    async function initSync() {
+      setSyncStatus("connecting", "Verbinden…");
+      updateShareUi();
+      const cfg = window.FIREBASE_CONFIG;
+      const hasFirebase =
+        cfg && cfg.apiKey && cfg.databaseURL && cfg.databaseURL.startsWith("https://");
+
+      try {
+        if (hasFirebase) {
+          await initFirebaseSync(cfg);
+        } else {
+          await initWebRtcSync();
+        }
+      } catch (err) {
+        console.warn("Sync niet beschikbaar:", err);
+        syncMode = "local";
+        setSyncStatus("connecting", "Alleen lokaal — vul firebase-config.js in voor betrouwbare sync");
+      }
     }
 
     function switchRoom(newRoomRaw) {
       const newRoom = sanitizeRoom(newRoomRaw);
       if (newRoom === getRoomId()) return;
+      if (firebaseUnsub) firebaseUnsub();
+      if (webrtcProvider) webrtcProvider.destroy();
+      firebaseUnsub = null;
+      webrtcProvider = null;
+      firebaseDb = null;
+      yMap = null;
       setRoomInUrl(newRoom);
       state = loadState();
       render();
       initSync();
     }
 
-    function applyStatusChange(task, status) {
-      const prev = task.status;
+    function applyStatusChange(task, status, previousStatus) {
       task.status = status;
       if (status === "done") {
         task.checked = true;
-        if (prev !== "done") fireConfetti();
+        if (previousStatus !== "done") fireConfetti();
       } else {
         task.checked = false;
       }
@@ -519,7 +695,8 @@
       const idx = STATUSES.indexOf(task.status);
       const next = idx + direction;
       if (next < 0 || next >= STATUSES.length) return;
-      applyStatusChange(task, STATUSES[next]);
+      const previousStatus = task.status;
+      applyStatusChange(task, STATUSES[next], previousStatus);
       saveState();
       render();
     }
@@ -527,7 +704,8 @@
     function setStatus(id, status) {
       const task = state.tasks.find((t) => t.id === id);
       if (!task || task.status === status) return;
-      applyStatusChange(task, status);
+      const previousStatus = task.status;
+      applyStatusChange(task, status, previousStatus);
       saveState();
       render();
     }
@@ -535,14 +713,13 @@
     function toggleChecked(id, checked) {
       const task = state.tasks.find((t) => t.id === id);
       if (!task) return;
+      const wasCompleted = task.status === "done" && task.checked;
       task.checked = checked;
       if (checked) {
         if (task.status !== "done") {
           task.status = "done";
-          fireConfetti();
+          if (!wasCompleted) fireConfetti();
         }
-      } else if (task.status === "done") {
-        task.status = "doing";
       }
       saveState();
       render();
@@ -560,6 +737,7 @@
       const card = document.createElement("article");
       card.className = "card" + (task.checked ? " done-checked" : "");
       card.draggable = true;
+      card.dataset.id = task.id;
 
       card.addEventListener("dragstart", (e) => {
         e.dataTransfer.setData("text/plain", task.id);
@@ -573,6 +751,7 @@
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
       checkbox.checked = task.checked;
+      checkbox.title = "Taak afvinken";
       checkbox.addEventListener("change", () => toggleChecked(task.id, checkbox.checked));
 
       const body = document.createElement("div");
@@ -608,7 +787,11 @@
     }
 
     function escapeHtml(s) {
-      return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      return s
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
     }
 
     function render() {
@@ -628,6 +811,7 @@
 
         const cards = document.createElement("div");
         cards.className = "cards";
+        cards.dataset.status = status;
 
         cards.addEventListener("dragover", (e) => {
           e.preventDefault();
@@ -657,18 +841,24 @@
     });
 
     document.getElementById("copyLinkBtn").addEventListener("click", async () => {
+      const url = getShareUrl();
       try {
-        await navigator.clipboard.writeText(getShareUrl());
+        await navigator.clipboard.writeText(url);
         const btn = document.getElementById("copyLinkBtn");
+        const prev = btn.textContent;
         btn.textContent = "Gekopieerd!";
-        setTimeout(() => { btn.textContent = "Kopieer link"; }, 2000);
+        setTimeout(() => {
+          btn.textContent = prev;
+        }, 2000);
       } catch (_) {
         document.getElementById("shareUrl").select();
         document.execCommand("copy");
       }
     });
 
-    document.getElementById("roomInput").addEventListener("change", (e) => switchRoom(e.target.value));
+    document.getElementById("roomInput").addEventListener("change", (e) => {
+      switchRoom(e.target.value);
+    });
     document.getElementById("roomInput").addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
@@ -682,6 +872,7 @@
     }
 
     render();
+    updateShareUi();
     initSync();
   </script>
 </body>
