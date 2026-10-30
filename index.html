@@ -80,7 +80,8 @@
       line-height: 1.4;
     }
 
-    .modal-card input {
+    .modal-card input[type="text"],
+    .modal-card input[type="password"] {
       width: 100%;
       padding: 0.75rem 1rem;
       border: 1px solid var(--border);
@@ -102,7 +103,25 @@
       min-height: 1rem;
     }
 
-    /* Beheerderswachtrij Box in UI */
+    .admin-key-box {
+      background: #f1f5f9;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.85rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    .admin-key-box label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+    }
+
     .admin-approval-banner {
       background: #fffbeb;
       border: 1px solid #fde68a;
@@ -302,6 +321,11 @@
     .user-badge.you {
       background: var(--todo-bg);
       color: var(--primary);
+    }
+
+    .user-badge.admin {
+      background: #fef3c7;
+      color: #b45309;
     }
 
     .user-activity-status {
@@ -641,22 +665,30 @@
   </style>
 </head>
 <body>
-  <!-- Modal voor naam invoeren -->
+  <!-- Modal voor naam & beheerderssleutel -->
   <div class="modal-overlay" id="usernameModal">
     <div class="modal-card">
       <h2>Welkom bij Campus Het Spoor</h2>
       <p>Vul je voornaam in om toe te treden. Minstens 3 letters, geen nummers en geen ongepaste woorden.</p>
       <input type="text" id="modalUsernameInput" placeholder="Jouw naam..." maxlength="20" autocomplete="off" />
+      
+      <div class="admin-key-box">
+        <label for="isAdminCheckbox">
+          <input type="checkbox" id="isAdminCheckbox" /> Ik ben de beheerder
+        </label>
+        <input type="password" id="adminKeyInput" placeholder="Beheerderssleutel (bijv. spoor2026)" class="hidden" autocomplete="off" />
+      </div>
+
       <div class="modal-error-msg" id="modalErrorMsg"></div>
-      <button type="button" class="primary" id="modalSubmitBtn">Verzoek tot toelating indienen</button>
+      <button type="button" class="primary" id="modalSubmitBtn">Verder naar bord</button>
     </div>
   </div>
 
-  <!-- Modal voor Wachtruimte (wachten op goedkeuring beheerder) -->
+  <!-- Modal voor Wachtruimte -->
   <div class="modal-overlay hidden" id="waitingModal">
     <div class="modal-card" style="text-align: center;">
       <h2>Wachten op goedkeuring...</h2>
-      <p>Je toelatingsverzoek is verzonden naar de beheerder van deze kamer. Even geduld tot je wordt toegelaten!</p>
+      <p>Je toelatingsverzoek is verzonden naar de beheerder. Even geduld tot je wordt toegelaten!</p>
       <div style="margin: 1rem 0;">
         <span class="sync-status connecting"><span class="dot"></span> <span>Wachten op beheerder</span></span>
       </div>
@@ -674,7 +706,6 @@
   </header>
 
   <div class="top-controls">
-    <!-- Beheerderswachtrij banner (verschijnt enkel voor de beheerder als er aanvragen zijn) -->
     <div class="admin-approval-banner hidden" id="adminApprovalBanner">
       <div class="admin-approval-title">🔐 Beheerdersgoedkeuring (Nieuwe aanvragen)</div>
       <div class="approval-list" id="approvalList"></div>
@@ -726,8 +757,9 @@
   <script src="firebase-config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
   <script type="module">
-    const STORAGE_KEY = "campus-spoor-kanban-v6";
+    const STORAGE_KEY = "campus-spoor-kanban-v7";
     const DEFAULT_ROOM = "spoor";
+    const ADMIN_KEY_SECRET = "spoor2026"; // Geheime beheerderssleutel
 
     const INITIAL_TASKS = [
       { id: "1-1", category: "1. Beheer en gebruiksvriendelijkheid", title: "Simpeler beheer met drag-and-drop; minder ingewikkeld systeem" },
@@ -776,7 +808,8 @@
     })();
 
     let userName = localStorage.getItem("kanban-user-name") || "";
-    let isApproved = localStorage.getItem(`kanban-approved:${getRoomId()}`) === "true";
+    let isAdmin = localStorage.getItem(`kanban-is-admin:${getRoomId()}`) === "true";
+    let isApproved = isAdmin || localStorage.getItem(`kanban-approved:${getRoomId()}`) === "true";
     let currentActivity = "Kijkt naar het bord";
     let activityTimer = null;
 
@@ -922,6 +955,7 @@
         completed: doneCount,
         percent: boardPercent,
         activity: currentActivity,
+        isAdmin: isAdmin,
         isSelf: true
       });
 
@@ -933,6 +967,7 @@
             completed: peerData.completed || 0,
             percent: peerData.percent || 0,
             activity: peerData.activity || "Actief in document",
+            isAdmin: peerData.isAdmin || false,
             isSelf: false
           });
         }
@@ -949,6 +984,7 @@
             <span class="user-name">
               ${escapeHtml(u.name)}
               ${u.isSelf ? '<span class="user-badge you">Jij</span>' : ''}
+              ${u.isAdmin ? '<span class="user-badge admin">Beheerder</span>' : ''}
             </span>
             <span style="font-weight:700; font-size:0.8rem; color: var(--done);">${u.percent}%</span>
           </div>
@@ -965,6 +1001,7 @@
     }
 
     function renderApprovalList() {
+      if (!isAdmin) return;
       const banner = document.getElementById("adminApprovalBanner");
       const list = document.getElementById("approvalList");
       list.innerHTML = "";
@@ -1021,6 +1058,7 @@
         completed: doneCount,
         percent: percent,
         activity: currentActivity,
+        isAdmin: isAdmin,
         updatedAt: Date.now()
       };
 
@@ -1041,7 +1079,6 @@
       if (!isApproved) return;
       const doneCount = state.tasks.filter(t => t.status === "done").length;
       const totalTasks = state.tasks.length || 1;
-      const percent = Math.round((doneCount / totalTasks) * 100);
 
       const data = {
         tasks: state.tasks,
@@ -1070,6 +1107,11 @@
       firebaseDb = firebaseApi.getDatabase(app);
       syncMode = "firebase";
 
+      if (isAdmin) {
+        const { ref, set } = firebaseApi;
+        await set(ref(firebaseDb, `rooms/${getRoomId()}/approvals/${clientId}`), true);
+      }
+
       // Controleer goedkeuring
       const approvalRef = firebaseApi.ref(firebaseDb, `rooms/${getRoomId()}/approvals/${clientId}`);
       firebaseApi.onValue(approvalRef, (snap) => {
@@ -1083,23 +1125,23 @@
         }
       });
 
-      // Als gebruiker nog niet goedgekeurd is, dien verzoek in
-      if (!isApproved) {
+      if (!isApproved && !isAdmin) {
         const reqRef = firebaseApi.ref(firebaseDb, `rooms/${getRoomId()}/requests/${clientId}`);
         firebaseApi.set(reqRef, { clientId, name: userName, timestamp: Date.now() });
         document.getElementById("waitingModal").classList.remove("hidden");
       }
 
-      // Beheerderswachtrij luisteren
-      const requestsRef = firebaseApi.ref(firebaseDb, `rooms/${getRoomId()}/requests`);
-      firebaseApi.onValue(requestsRef, (snap) => {
-        const val = snap.val() || {};
-        pendingRequestsMap.clear();
-        Object.values(val).forEach(req => {
-          if (req && req.clientId) pendingRequestsMap.set(req.clientId, req);
+      if (isAdmin) {
+        const requestsRef = firebaseApi.ref(firebaseDb, `rooms/${getRoomId()}/requests`);
+        firebaseApi.onValue(requestsRef, (snap) => {
+          const val = snap.val() || {};
+          pendingRequestsMap.clear();
+          Object.values(val).forEach(req => {
+            if (req && req.clientId) pendingRequestsMap.set(req.clientId, req);
+          });
+          renderApprovalList();
         });
-        renderApprovalList();
-      });
+      }
 
       const stateRef = firebaseApi.ref(firebaseDb, `rooms/${getRoomId()}/state`);
       let seeded = false;
@@ -1134,7 +1176,6 @@
     }
 
     async function initWebRtcSync() {
-      // In lokale/WebRTC modus direct toelaten voor naadloze werking indien geen firebase
       isApproved = true;
       const Y = await import("https://esm.sh/yjs@13.6.18");
       const { WebrtcProvider } = await import("https://esm.sh/y-webrtc@10.3.0");
@@ -1196,7 +1237,8 @@
     function switchRoom(newRoomRaw) {
       const newRoom = sanitizeRoom(newRoomRaw);
       if (newRoom === getRoomId()) return;
-      isApproved = localStorage.getItem(`kanban-approved:${newRoom}`) === "true";
+      isAdmin = localStorage.getItem(`kanban-is-admin:${newRoom}`) === "true";
+      isApproved = isAdmin || localStorage.getItem(`kanban-approved:${newRoom}`) === "true";
       if (rtdbUnsub) rtdbUnsub();
       if (webrtcProvider) webrtcProvider.destroy();
       rtdbUnsub = null;
@@ -1418,15 +1460,34 @@
       renderActiveUsers();
     }
 
+    document.getElementById("isAdminCheckbox").addEventListener("change", (e) => {
+      const keyInput = document.getElementById("adminKeyInput");
+      if (e.target.checked) keyInput.classList.remove("hidden");
+      else keyInput.classList.add("hidden");
+    });
+
     function handleUsernameSubmission(inputVal) {
       const err = validateUsername(inputVal);
       const inputEl = document.getElementById("modalUsernameInput");
       const errEl = document.getElementById("modalErrorMsg");
+      const isAdminChecked = document.getElementById("isAdminCheckbox").checked;
+      const adminKeyVal = document.getElementById("adminKeyInput").value.trim();
 
       if (err) {
         inputEl.classList.add("error");
         errEl.textContent = err;
         return false;
+      }
+
+      if (isAdminChecked) {
+        if (adminKeyVal !== ADMIN_KEY_SECRET) {
+          errEl.textContent = "Ongeldige beheerderssleutel.";
+          return false;
+        }
+        isAdmin = true;
+        isApproved = true;
+        localStorage.setItem(`kanban-is-admin:${getRoomId()}`, "true");
+        localStorage.setItem(`kanban-approved:${getRoomId()}`, "true");
       }
 
       inputEl.classList.remove("error");
