@@ -471,39 +471,39 @@
   <script src="firebase-config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
   <script type="module">
-    const STORAGE_KEY = "campus-spoor-kanban-v2";
+    const STORAGE_KEY = "campus-spoor-kanban-v3";
     const DEFAULT_ROOM = "spoor";
 
     const INITIAL_TASKS = [
       { id: "1-1", category: "1. Beheer en gebruiksvriendelijkheid", title: "Simpeler beheer met drag-and-drop; minder ingewikkeld systeem" },
       { id: "1-2", category: "1. Beheer en gebruiksvriendelijkheid", title: "Onderhoudsvriendelijk voor beheerders, eenvoudige updates" },
       { id: "1-3", category: "1. Beheer en gebruiksvriendelijkheid", title: "Platform en toepassingen budgetvriendelijk houden" },
-      { id: "2-1", category: "2. Design en layout", title: "Responsiviteit: GSM, tablet en laptop automatisch laten meeschalen" },
-      { id: "2-2", category: "2. Design en layout", title: "Moderne, aantrekkelijke uitstraling (jong, professioneel voor ouders)" },
-      { id: "2-3", category: "2. Design en layout", title: "Huisstijl: teksten en elementen in officiële schoolkleuren" },
-      { id: "2-4", category: "2. Design en layout", title: "Overzichtelijkere navigatie en structuur (o.a. richtingen)" },
-      { id: "2-5", category: "2. Design en layout", title: "Visuele afwerking: contrasten, homepage, gestylde Google Maps" },
-      { id: "3-1", category: "3. Visie en sfeer", title: "Pedagogische visie duidelijker, met Campus Het Spoor-identiteit" },
-      { id: "3-2", category: "3. Visie en sfeer", title: "Sfeer en eerste indruk: school laten leven, interactieve beleving" },
-      { id: "3-3", category: "3. Visie en sfeer", title: "Kernwaarden visueel uitbeelden (eigentijds leren, zelfstandigheid, samen, betrokken)" },
-      { id: "3-4", category: "3. Visie en sfeer", title: "Alleen passende, actuele schoolfoto's — geen willekeurige stock" },
-      { id: "3-5", category: "3. Visie en sfeer", title: "Klikbare foto's met extra informatie" },
-      { id: "4-1", category: "4. Studierichtingen", title: "Overzicht graden, richtingen en lessentabellen begrijpelijker en visueler" },
-      { id: "4-2", category: "4. Studierichtingen", title: "Interactieve roadmap / visueel spoor voor studiepad" },
-      { id: "4-3", category: "4. Studierichtingen", title: "Spoorthema verder uitdiepen in interactieve onderdelen" },
-      { id: "5-1", category: "5. Team en contact", title: "Introductie van het schoolteam op de contactpagina" },
-      { id: "5-2", category: "5. Team en contact", title: "Transparante teamstructuur (groepen, vakken, leerkrachten)" },
-      { id: "5-3", category: "5. Team en contact", title: "Duidelijke contactgegevens en sociale media" },
-      { id: "6-1", category: "6. AI chatbot en zoek", title: "AI-chatbot subtiel (niet oppoppen, geen half scherm)" },
-      { id: "6-2", category: "6. AI chatbot en zoek", title: "Mascot/emoji/schoolrobot koppelen aan chatbot" },
-      { id: "6-3", category: "6. AI chatbot en zoek", title: "FAQ, schoolreglement en inschrijving in chatbot-kennisbank" },
-      { id: "6-4", category: "6. AI chatbot en zoek", title: "Logging gesprekken + e-mail fallback bij onbeantwoorde vragen" },
-      { id: "6-5", category: "6. AI chatbot en zoek", title: "Duidelijke zoekbalk op de website" },
-      { id: "7-1", category: "7. Veiligheid en recht", title: "Beveiliging verbeteren; geen open admin-panels; minder host-afhankelijkheid" },
-      { id: "7-2", category: "7. Veiligheid en recht", title: "Volledige rechten op foto's en content (copyright)" },
-      { id: "7-3", category: "7. Veiligheid en recht", title: "Subtiele cookie- en privacyweergave" },
-      { id: "7-4", category: "7. Veiligheid en recht", title: "Google Bedrijfsprofiel claimen; Maps-foto's en reviews" },
-      { id: "7-5", category: "7. Veiligheid en recht", title: "Sollicitaties/vacatures: toestemming directie bij proceswijziging; formulieren naar directie" },
+      { id: "2-1", category: "2. Design, layout en schermresoluties", title: "Responsiviteit: GSM, tablet en laptop automatisch laten meeschalen" },
+      { id: "2-2", category: "2. Design, layout en schermresoluties", title: "Moderne, aantrekkelijke uitstraling (jong, professioneel voor ouders)" },
+      { id: "2-3", category: "2. Design, layout en schermresoluties", title: "Huisstijl: teksten en elementen in officiële schoolkleuren" },
+      { id: "2-4", category: "2. Design, layout en schermresoluties", title: "Overzichtelijkere navigatie en structuur (o.a. richtingen)" },
+      { id: "2-5", category: "2. Design, layout en schermresoluties", title: "Visuele afwerking: contrasten, homepage, gestylde Google Maps" },
+      { id: "3-1", category: "3. Visie, sfeer en content", title: "Pedagogische visie duidelijker, met Campus Het Spoor-identiteit" },
+      { id: "3-2", category: "3. Visie, sfeer en content", title: "Sfeer en eerste indruk: school laten leven, interactieve beleving" },
+      { id: "3-3", category: "3. Visie, sfeer en content", title: "Kernwaarden visueel uitbeelden (eigentijds leren, zelfstandigheid, samen, betrokken)" },
+      { id: "3-4", category: "3. Visie, sfeer en content", title: "Alleen passende, actuele schoolfoto's — geen willekeurige stock" },
+      { id: "3-5", category: "3. Visie, sfeer en content", title: "Klikbare foto's met extra informatie" },
+      { id: "4-1", category: "4. Studierichtingen en interactief spoor", title: "Overzicht graden, richtingen en lessentabellen begrijpelijker en visueler" },
+      { id: "4-2", category: "4. Studierichtingen en interactief spoor", title: "Interactieve roadmap / visueel spoor voor studiepad" },
+      { id: "4-3", category: "4. Studierichtingen en interactief spoor", title: "Spoorthema verder uitdiepen in interactieve onderdelen" },
+      { id: "5-1", category: "5. Schoolteam en contact", title: "Introductie van het schoolteam op de contactpagina" },
+      { id: "5-2", category: "5. Schoolteam en contact", title: "Transparante teamstructuur (groepen, vakken, leerkrachten)" },
+      { id: "5-3", category: "5. Schoolteam en contact", title: "Duidelijke contactgegevens en sociale media" },
+      { id: "6-1", category: "6. AI chatbot, mascot en zoekfunctie", title: "AI-chatbot subtiel (niet oppoppen, geen half scherm)" },
+      { id: "6-2", category: "6. AI chatbot, mascot en zoekfunctie", title: "Mascot/emoji/schoolrobot koppelen aan chatbot" },
+      { id: "6-3", category: "6. AI chatbot, mascot en zoekfunctie", title: "FAQ, schoolreglement en inschrijving in chatbot-kennisbank" },
+      { id: "6-4", category: "6. AI chatbot, mascot en zoekfunctie", title: "Logging gesprekken + e-mail fallback bij onbeantwoorde vragen" },
+      { id: "6-5", category: "6. AI chatbot, mascot en zoekfunctie", title: "Duidelijke zoekbalk op de website" },
+      { id: "7-1", category: "7. Veiligheid, juridisch, formulieren", title: "Beveiliging verbeteren; geen open admin-panels; minder host-afhankelijkheid" },
+      { id: "7-2", category: "7. Veiligheid, juridisch, formulieren", title: "Volledige rechten op foto's en content (copyright)" },
+      { id: "7-3", category: "7. Veiligheid, juridisch, formulieren", title: "Subtiele cookie- en privacyweergave" },
+      { id: "7-4", category: "7. Veiligheid, juridisch, formulieren", title: "Google Bedrijfsprofiel claimen; Maps-foto's en reviews" },
+      { id: "7-5", category: "7. Veiligheid, juridisch, formulieren", title: "Sollicitaties/vacatures: toestemming directie bij proceswijziging; formulieren naar directie" },
     ];
 
     const STATUSES = ["todo", "doing", "done"];
@@ -770,7 +770,6 @@
       const container = document.getElementById("categoryFilters");
       const categories = [...new Set(INITIAL_TASKS.map(t => t.category))];
       
-      // Keep "Alles" button, remove others before rebuilding
       container.innerHTML = '<button type="button" class="filter-chip active" data-cat="all">Alles</button>';
 
       categories.forEach(cat => {
@@ -778,7 +777,6 @@
         btn.type = "button";
         btn.className = "filter-chip";
         btn.dataset.cat = cat;
-        // Shorten label for display
         btn.textContent = cat.replace(/^\d+\.\s*/, "");
         btn.addEventListener("click", () => {
           document.querySelectorAll(".filter-chip").forEach(c => c.classList.remove("active"));
