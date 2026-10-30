@@ -38,6 +38,71 @@
       flex-direction: column;
     }
 
+    /* Modal Overlay voor Username */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 1rem;
+    }
+
+    .modal-overlay.hidden {
+      display: none;
+    }
+
+    .modal-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 2rem;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: var(--shadow-md);
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .modal-card h2 {
+      margin: 0;
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+
+    .modal-card p {
+      margin: 0;
+      font-size: 0.9rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .modal-card input {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.95rem;
+      background: #f8fafc;
+      color: var(--text);
+    }
+
+    .modal-card input.error {
+      border-color: #ef4444;
+      background: #fef2f2;
+    }
+
+    .modal-error-msg {
+      font-size: 0.8rem;
+      color: #ef4444;
+      margin-top: -0.5rem;
+      min-height: 1rem;
+    }
+
     header {
       background: var(--surface);
       border-bottom: 1px solid var(--border);
@@ -88,10 +153,8 @@
       margin: 1.25rem auto 0;
       padding: 0 2rem;
       display: flex;
-      flex-wrap: wrap;
+      flex-direction: column;
       gap: 1rem;
-      align-items: center;
-      justify-content: space-between;
     }
 
     .share-bar {
@@ -104,8 +167,7 @@
       gap: 0.75rem;
       align-items: center;
       box-shadow: var(--shadow-sm);
-      flex: 1;
-      min-width: 300px;
+      width: 100%;
     }
 
     .share-bar label {
@@ -133,6 +195,87 @@
     .share-bar input:not(.room-input) {
       flex: 1;
       min-width: 12rem;
+    }
+
+    .active-users-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .active-users-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.75rem;
+    }
+
+    .users-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .user-card {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.6rem 0.8rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .user-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .user-name {
+      font-weight: 600;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .user-badge {
+      font-size: 0.7rem;
+      background: #e2e8f0;
+      color: var(--muted);
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+    }
+
+    .user-badge.you {
+      background: var(--todo-bg);
+      color: var(--primary);
+    }
+
+    .user-stats-text {
+      font-size: 0.75rem;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .user-progress-bg {
+      background: #e2e8f0;
+      height: 6px;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .user-progress-fill {
+      background: var(--done);
+      height: 100%;
+      width: 0%;
+      transition: width 0.3s ease;
     }
 
     button {
@@ -441,6 +584,17 @@
   </style>
 </head>
 <body>
+  <!-- Modal voor verplichte username-controle -->
+  <div class="modal-overlay" id="usernameModal">
+    <div class="modal-card">
+      <h2>Welkom bij Campus Het Spoor</h2>
+      <p>Vul je voornaam in om het Kanban-bord te openen. Gebruik minstens 3 letters, geen nummers en geen ongepaste woorden.</p>
+      <input type="text" id="modalUsernameInput" placeholder="Jouw naam..." maxlength="20" autocomplete="off" />
+      <div class="modal-error-msg" id="modalErrorMsg"></div>
+      <button type="button" class="primary" id="modalSubmitBtn">Verder naar bord</button>
+    </div>
+  </div>
+
   <header>
     <div class="header-content">
       <h1>Waar knelt het schoentje? — Kanbanbord</h1>
@@ -455,6 +609,8 @@
     <div class="share-bar" id="shareBar">
       <label for="roomInput">Kamer</label>
       <input type="text" id="roomInput" class="room-input" maxlength="32" autocomplete="off" spellcheck="false" />
+      <label for="userNameInput">Naam</label>
+      <input type="text" id="userNameInput" maxlength="20" autocomplete="off" />
       <label for="shareUrl">Link</label>
       <input type="text" id="shareUrl" readonly />
       <button type="button" id="copyLinkBtn" class="primary">Kopieer</button>
@@ -462,6 +618,11 @@
         <span class="dot" aria-hidden="true"></span>
         <span id="syncStatusText">Verbinden…</span>
       </span>
+    </div>
+
+    <div class="active-users-panel">
+      <div class="active-users-title">Actieve Gebruikers in dit Document</div>
+      <div class="users-grid" id="usersGrid"></div>
     </div>
   </div>
 
@@ -523,6 +684,11 @@
       { id: "7-5", category: "7. Veiligheid, juridisch, formulieren", title: "Sollicitaties/vacatures: toestemming directie bij proceswijziging; formulieren naar directie" },
     ];
 
+    const FORBIDDEN_WORDS = [
+      "fuck", "shit", "bitch", "bastard", "asshole", "idiot", "stupid", 
+      "moeder", "klootzak", "lul", "schijt", "kont", "poep", "kak", "geit", "hoer"
+    ];
+
     const STATUSES = ["todo", "doing", "done"];
     const LABELS = { todo: "Todo", doing: "Doing", done: "Done" };
 
@@ -531,6 +697,25 @@
       sessionStorage.setItem("kanban-client-id", id);
       return id;
     })();
+
+    let userName = localStorage.getItem("kanban-user-name") || "";
+
+    function validateUsername(name) {
+      const trimmed = String(name || "").trim();
+      if (trimmed.length < 3) {
+        return "Naam moet minstens 3 letters bevatten.";
+      }
+      if (/\d/.test(trimmed)) {
+        return "Nummers zijn niet toegestaan in je naam.";
+      }
+      const lower = trimmed.toLowerCase();
+      for (const word of FORBIDDEN_WORDS) {
+        if (lower.includes(word)) {
+          return "Gelieve een gepaste naam te gebruiken.";
+        }
+      }
+      return null;
+    }
 
     let state = loadState();
     let currentFilter = "all";
@@ -635,9 +820,57 @@
     function updateShareUi() {
       document.getElementById("roomInput").value = getRoomId();
       document.getElementById("shareUrl").value = getShareUrl();
+      document.getElementById("userNameInput").value = userName;
+    }
+
+    function renderActiveUsers(users = []) {
+      const grid = document.getElementById("usersGrid");
+      grid.innerHTML = "";
+
+      const totalTasks = state.tasks.length || 1;
+      const doneCount = state.tasks.filter(t => t.status === "done").length;
+      const boardPercent = Math.round((doneCount / totalTasks) * 100);
+
+      const displayUsers = users.length > 0 ? users : [{
+        id: clientId,
+        name: userName,
+        completed: doneCount,
+        percent: boardPercent,
+        isSelf: true
+      }];
+
+      displayUsers.forEach(u => {
+        const isSelf = u.id === clientId || u.isSelf;
+        const card = document.createElement("div");
+        card.className = "user-card";
+
+        const uPercent = u.percent !== undefined ? u.percent : boardPercent;
+        const uCompleted = u.completed !== undefined ? u.completed : doneCount;
+
+        card.innerHTML = `
+          <div class="user-header">
+            <span class="user-name">
+              ${escapeHtml(u.name || "Anoniem")}
+              ${isSelf ? '<span class="user-badge you">Jij</span>' : ''}
+            </span>
+            <span style="font-weight:700; font-size:0.8rem; color: var(--done);">${uPercent}%</span>
+          </div>
+          <div class="user-progress-bg">
+            <div class="user-progress-fill" style="width: ${uPercent}%;"></div>
+          </div>
+          <div class="user-stats-text">
+            <span>Voltooid: ${uCompleted}/${totalTasks}</span>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
     }
 
     async function pushStateToPeers() {
+      const doneCount = state.tasks.filter(t => t.status === "done").length;
+      const totalTasks = state.tasks.length || 1;
+      const percent = Math.round((doneCount / totalTasks) * 100);
+
       if (syncMode === "firebase" && firebaseDb) {
         const { ref, set } = firebaseApi;
         await set(ref(firebaseDb, `rooms/${getRoomId()}`), {
@@ -651,7 +884,17 @@
           updatedAt: state.updatedAt,
           clientId: state.clientId
         });
+
+        if (webrtcProvider) {
+          webrtcProvider.awareness.setLocalStateField("user", {
+            id: clientId,
+            name: userName,
+            completed: doneCount,
+            percent: percent
+          });
+        }
       }
+      renderActiveUsers();
     }
 
     let firebaseDb = null;
@@ -694,10 +937,27 @@
       });
 
       const updatePresence = () => {
+        const states = Array.from(webrtcProvider.awareness.getStates().values());
+        const activeUsers = states
+          .map(s => s.user)
+          .filter(Boolean);
+
         const n = webrtcProvider.awareness.getStates().size;
         setSyncStatus("live", n > 1 ? `Live · ${n} personen` : "Live · lokaal actief");
+        renderActiveUsers(activeUsers);
       };
+
       webrtcProvider.awareness.on("change", updatePresence);
+
+      const doneCount = state.tasks.filter(t => t.status === "done").length;
+      const totalTasks = state.tasks.length || 1;
+      webrtcProvider.awareness.setLocalStateField("user", {
+        id: clientId,
+        name: userName,
+        completed: doneCount,
+        percent: Math.round((doneCount / totalTasks) * 100)
+      });
+
       updatePresence();
 
       const existing = yMap.get("payload");
@@ -719,6 +979,7 @@
       } catch (err) {
         syncMode = "local";
         setSyncStatus("connecting", "Lokaal opgeslagen");
+        renderActiveUsers();
       }
     }
 
@@ -821,7 +1082,7 @@
     }
 
     function escapeHtml(s) {
-      return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     }
 
     function renderCard(task) {
@@ -919,7 +1180,52 @@
       });
 
       updateStats();
+      renderActiveUsers();
     }
+
+    function handleUsernameSubmission(inputVal) {
+      const err = validateUsername(inputVal);
+      const inputEl = document.getElementById("modalUsernameInput");
+      const errEl = document.getElementById("modalErrorMsg");
+
+      if (err) {
+        inputEl.classList.add("error");
+        errEl.textContent = err;
+        return false;
+      }
+
+      inputEl.classList.remove("error");
+      errEl.textContent = "";
+      userName = inputVal.trim();
+      localStorage.setItem("kanban-user-name", userName);
+      document.getElementById("usernameModal").classList.add("hidden");
+      updateShareUi();
+      pushStateToPeers();
+      return true;
+    }
+
+    document.getElementById("modalSubmitBtn").addEventListener("click", () => {
+      handleUsernameSubmission(document.getElementById("modalUsernameInput").value);
+    });
+
+    document.getElementById("modalUsernameInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        handleUsernameSubmission(e.target.value);
+      }
+    });
+
+    document.getElementById("userNameInput").addEventListener("change", (e) => {
+      const val = e.target.value;
+      const err = validateUsername(val);
+      if (err) {
+        alert(err);
+        e.target.value = userName;
+        return;
+      }
+      userName = val.trim();
+      localStorage.setItem("kanban-user-name", userName);
+      pushStateToPeers();
+    });
 
     document.getElementById("searchInput").addEventListener("input", (e) => {
       searchQuery = e.target.value;
@@ -953,7 +1259,12 @@
     setupFilters();
     render();
     updateShareUi();
-    initSync();
+
+    if (!userName || validateUsername(userName) !== null) {
+      document.getElementById("usernameModal").classList.remove("hidden");
+    } else {
+      initSync();
+    }
   </script>
 </body>
 </html>
