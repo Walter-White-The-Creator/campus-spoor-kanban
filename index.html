@@ -6,16 +6,22 @@
   <title>Kanban — Waar knelt het schoentje?</title>
   <style>
     :root {
-      --bg: #f0f4f8;
+      --bg: #f8fafc;
       --surface: #ffffff;
-      --text: #1a2332;
-      --muted: #5c6b7f;
-      --todo: #3b82f6;
-      --doing: #f59e0b;
-      --done: #10b981;
+      --text: #0f172a;
+      --muted: #64748b;
       --border: #e2e8f0;
-      --shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
-      --radius: 12px;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --todo: #3b82f6;
+      --todo-bg: #eff6ff;
+      --doing: #f59e0b;
+      --doing-bg: #fffbeb;
+      --done: #10b981;
+      --done-bg: #ecfdf5;
+      --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.05);
+      --shadow-md: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+      --radius: 16px;
     }
 
     * {
@@ -24,22 +30,34 @@
 
     body {
       margin: 0;
-      font-family: "Segoe UI", system-ui, sans-serif;
-      background: linear-gradient(160deg, #e8f0fe 0%, var(--bg) 40%, #f8fafc 100%);
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
       color: var(--text);
       min-height: 100vh;
+      display: flex;
+      flex-direction: column;
     }
 
     header {
-      padding: 1.5rem 1.25rem 0.75rem;
-      max-width: 1400px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 1.5rem 2rem;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .header-content {
+      max-width: 1500px;
       margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
     }
 
     header h1 {
-      margin: 0 0 0.35rem;
-      font-size: 1.5rem;
-      font-weight: 700;
+      margin: 0;
+      font-size: 1.75rem;
+      font-weight: 800;
+      letter-spacing: -0.025em;
     }
 
     header p {
@@ -49,106 +67,95 @@
       line-height: 1.5;
     }
 
-    .flow {
+    .top-controls {
+      max-width: 1500px;
+      margin: 1.25rem auto 0;
+      padding: 0 2rem;
       display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
       align-items: center;
-      gap: 0.5rem;
-      margin-top: 1rem;
-      font-weight: 600;
-      font-size: 0.85rem;
-      letter-spacing: 0.02em;
+      justify-content: space-between;
     }
 
-    .flow span {
-      padding: 0.25rem 0.65rem;
-      border-radius: 999px;
-      color: #fff;
-    }
-
-    .flow .todo-label { background: var(--todo); }
-    .flow .doing-label { background: var(--doing); }
-    .flow .done-label { background: var(--done); }
-
-    .toolbar {
-      max-width: 1400px;
-      margin: 0.75rem auto 0;
-      padding: 0 1.25rem;
+    .share-bar {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.75rem 1.25rem;
       display: flex;
       flex-wrap: wrap;
       gap: 0.75rem;
       align-items: center;
-    }
-
-    .toolbar button {
-      border: 1px solid var(--border);
-      background: var(--surface);
-      padding: 0.45rem 0.85rem;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 0.875rem;
-    }
-
-    .toolbar button:hover {
-      background: #f8fafc;
-    }
-
-    .stats {
-      font-size: 0.875rem;
-      color: var(--muted);
-    }
-
-    .share-bar {
-      max-width: 1400px;
-      margin: 0.5rem auto 0;
-      padding: 0.75rem 1.25rem;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.65rem;
-      align-items: center;
-      background: rgba(255, 255, 255, 0.85);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
+      box-shadow: var(--shadow-sm);
+      flex: 1;
+      min-width: 300px;
     }
 
     .share-bar label {
       font-size: 0.8rem;
-      font-weight: 600;
+      font-weight: 700;
       color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
 
     .share-bar input[type="text"] {
-      flex: 1;
-      min-width: 12rem;
-      padding: 0.45rem 0.65rem;
+      padding: 0.5rem 0.75rem;
       border: 1px solid var(--border);
       border-radius: 8px;
-      font-size: 0.85rem;
+      font-size: 0.875rem;
       font-family: inherit;
+      background: #f8fafc;
+      color: var(--text);
     }
 
-    .share-bar input[type="text"].room-input {
-      max-width: 8rem;
-      flex: 0 1 auto;
+    .share-bar input.room-input {
+      width: 7rem;
     }
 
-    .share-bar button.primary {
-      background: var(--todo);
+    .share-bar input:not(.room-input) {
+      flex: 1;
+      min-width: 12rem;
+    }
+
+    button {
+      font-family: inherit;
+      cursor: pointer;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      padding: 0.5rem 1rem;
+      transition: all 0.2s ease;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+    }
+
+    button:hover {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+    }
+
+    button.primary {
+      background: var(--primary);
       color: #fff;
-      border-color: var(--todo);
+      border-color: var(--primary);
     }
 
-    .share-bar button.primary:hover {
-      background: #2563eb;
+    button.primary:hover {
+      background: var(--primary-hover);
+      border-color: var(--primary-hover);
     }
 
     .sync-status {
       display: inline-flex;
       align-items: center;
-      gap: 0.4rem;
-      font-size: 0.8rem;
+      gap: 0.5rem;
+      font-size: 0.85rem;
+      font-weight: 500;
       color: var(--muted);
-      padding: 0.35rem 0.65rem;
+      padding: 0.4rem 0.8rem;
       background: #f1f5f9;
       border-radius: 999px;
     }
@@ -162,7 +169,7 @@
 
     .sync-status.live .dot {
       background: var(--done);
-      box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.35);
+      box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
     }
 
     .sync-status.connecting .dot {
@@ -171,93 +178,153 @@
     }
 
     @keyframes pulse {
-      50% { opacity: 0.45; }
+      50% { opacity: 0.4; }
     }
 
-    .toolbar-row {
-      max-width: 1400px;
-      margin: 0.75rem auto 0;
-      padding: 0 1.25rem;
+    .toolbar {
+      max-width: 1500px;
+      margin: 1rem auto 0;
+      padding: 0 2rem;
       display: flex;
       flex-wrap: wrap;
-      gap: 0.75rem;
+      gap: 1rem;
       align-items: center;
+      justify-content: space-between;
+    }
+
+    .search-box {
+      position: relative;
+      flex: 1;
+      max-width: 400px;
+      min-width: 250px;
+    }
+
+    .search-box input {
+      width: 100%;
+      padding: 0.6rem 1rem 0.6rem 2.5rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.875rem;
+      background: var(--surface);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .search-box svg {
+      position: absolute;
+      left: 0.8rem;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 1rem;
+      height: 1rem;
+      fill: var(--muted);
+    }
+
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .filter-chip {
+      padding: 0.35rem 0.75rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .filter-chip.active {
+      background: var(--text);
+      color: #fff;
+      border-color: var(--text);
     }
 
     .board {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 1rem;
-      padding: 1.25rem;
-      max-width: 1400px;
-      margin: 0 auto 2rem;
-      min-height: 60vh;
+      gap: 1.5rem;
+      padding: 1.5rem 2rem 3rem;
+      max-width: 1500px;
+      margin: 0 auto;
+      flex: 1;
+      width: 100%;
     }
 
-    @media (max-width: 900px) {
+    @media (max-width: 1024px) {
       .board {
         grid-template-columns: 1fr;
       }
     }
 
     .column {
-      background: rgba(255, 255, 255, 0.65);
+      background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       display: flex;
       flex-direction: column;
-      min-height: 200px;
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
     }
 
     .column-header {
-      padding: 0.85rem 1rem;
-      border-bottom: 3px solid;
+      padding: 1.25rem 1.5rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      border-bottom: 1px solid var(--border);
       font-weight: 700;
-      font-size: 0.9rem;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
+      font-size: 0.95rem;
+      letter-spacing: 0.02em;
     }
 
-    .column[data-status="todo"] .column-header { border-color: var(--todo); color: var(--todo); }
-    .column[data-status="doing"] .column-header { border-color: var(--doing); color: #b45309; }
-    .column[data-status="done"] .column-header { border-color: var(--done); color: #047857; }
+    .column[data-status="todo"] .column-header { background: var(--todo-bg); color: #1e40af; border-bottom-color: #bfdbfe; }
+    .column[data-status="doing"] .column-header { background: var(--doing-bg); color: #92400e; border-bottom-color: #fde68a; }
+    .column[data-status="done"] .column-header { background: var(--done-bg); color: #065f46; border-bottom-color: #a7f3d0; }
 
     .count {
-      background: #f1f5f9;
-      color: var(--muted);
-      font-size: 0.75rem;
-      padding: 0.15rem 0.5rem;
+      background: #ffffff;
+      padding: 0.2rem 0.6rem;
       border-radius: 999px;
-      font-weight: 600;
+      font-size: 0.75rem;
+      font-weight: 700;
+      box-shadow: var(--shadow-sm);
     }
 
     .cards {
-      padding: 0.75rem;
+      padding: 1rem;
       flex: 1;
       display: flex;
       flex-direction: column;
-      gap: 0.65rem;
-      min-height: 120px;
+      gap: 0.85rem;
+      min-height: 250px;
+      transition: background 0.2s ease;
     }
 
     .cards.drag-over {
-      background: rgba(59, 130, 246, 0.06);
-      outline: 2px dashed var(--todo);
+      background: #f1f5f9;
+      outline: 2px dashed var(--primary);
       outline-offset: -4px;
-      border-radius: 0 0 var(--radius) var(--radius);
     }
 
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 0.75rem 0.85rem;
-      box-shadow: var(--shadow);
+      border-radius: 12px;
+      padding: 1rem;
+      box-shadow: var(--shadow-sm);
       cursor: grab;
-      transition: transform 0.15s, opacity 0.15s;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+    }
+
+    .card:hover {
+      box-shadow: var(--shadow-md);
+      transform: translateY(-2px);
+      border-color: #cbd5e1;
     }
 
     .card:active {
@@ -265,12 +332,13 @@
     }
 
     .card.dragging {
-      opacity: 0.45;
-      transform: scale(0.98);
+      opacity: 0.4;
+      transform: scale(0.97);
     }
 
     .card.done-checked {
-      opacity: 0.75;
+      opacity: 0.7;
+      background: #f8fafc;
     }
 
     .card.done-checked .card-title {
@@ -280,16 +348,15 @@
 
     .card-top {
       display: flex;
-      gap: 0.5rem;
+      gap: 0.75rem;
       align-items: flex-start;
     }
 
     .card input[type="checkbox"] {
-      margin-top: 0.2rem;
-      width: 1.1rem;
-      height: 1.1rem;
+      margin-top: 0.15rem;
+      width: 1.2rem;
+      height: 1.2rem;
       accent-color: var(--done);
-      flex-shrink: 0;
       cursor: pointer;
     }
 
@@ -299,155 +366,166 @@
     }
 
     .card-category {
+      display: inline-block;
       font-size: 0.7rem;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.03em;
-      color: var(--muted);
-      margin-bottom: 0.25rem;
+      letter-spacing: 0.05em;
+      color: var(--primary);
+      background: #eff6ff;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      margin-bottom: 0.5rem;
     }
 
     .card-title {
-      font-size: 0.875rem;
-      line-height: 1.45;
+      font-size: 0.9rem;
+      line-height: 1.5;
       margin: 0;
+      font-weight: 500;
     }
 
     .card-actions {
       display: flex;
-      flex-wrap: wrap;
-      gap: 0.35rem;
-      margin-top: 0.65rem;
+      gap: 0.5rem;
+      margin-top: 0.85rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid #f1f5f9;
     }
 
     .card-actions button {
-      font-size: 0.7rem;
-      padding: 0.2rem 0.45rem;
+      font-size: 0.75rem;
+      padding: 0.3rem 0.6rem;
       border-radius: 6px;
-      border: 1px solid var(--border);
       background: #f8fafc;
-      cursor: pointer;
       color: var(--muted);
     }
 
     .card-actions button:hover {
-      background: #eef2ff;
-      color: var(--todo);
-      border-color: #c7d2fe;
+      background: #eff6ff;
+      color: var(--primary);
+      border-color: #bfdbfe;
     }
 
     footer {
       text-align: center;
-      padding: 0 1rem 1.5rem;
-      font-size: 0.8rem;
+      padding: 1.5rem;
+      font-size: 0.85rem;
       color: var(--muted);
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      margin-top: auto;
+    }
+
+    .stats {
+      font-weight: 600;
+      color: var(--text);
+      font-size: 0.9rem;
     }
   </style>
 </head>
 <body>
   <header>
-    <h1>Waar knelt het schoentje? — Kanbanbord</h1>
-    <p>
-      Sleep kaarten tussen kolommen of gebruik de pijltjes. Vink af in <strong>DONE</strong> wanneer een punt echt af is.
-      Deel de groepslink — iedereen in dezelfde kamer ziet verplaatsingen live.
-    </p>
-    <div class="flow" aria-hidden="true">
-      <span class="todo-label">TODO</span>
-      <span>→</span>
-      <span class="doing-label">DOING</span>
-      <span>→</span>
-      <span class="done-label">DONE</span>
+    <div class="header-content">
+      <h1>Waar knelt het schoentje? — Kanbanbord</h1>
+      <p>
+        Beheer de website-backlog van Campus Het Spoor. Sleep kaarten tussen kolommen, vink items af in Done, of filter op categorie.
+      </p>
     </div>
   </header>
 
-  <div class="share-bar" id="shareBar">
-    <label for="roomInput">Kamer</label>
-    <input type="text" id="roomInput" class="room-input" maxlength="32" autocomplete="off" spellcheck="false" title="Zelfde kamer = zelfde bord" />
-    <label for="shareUrl">Groepslink</label>
-    <input type="text" id="shareUrl" readonly />
-    <button type="button" id="copyLinkBtn" class="primary">Kopieer link</button>
-    <span class="sync-status connecting" id="syncStatus" aria-live="polite">
-      <span class="dot" aria-hidden="true"></span>
-      <span id="syncStatusText">Verbinden…</span>
-    </span>
+  <div class="top-controls">
+    <div class="share-bar" id="shareBar">
+      <label for="roomInput">Kamer</label>
+      <input type="text" id="roomInput" class="room-input" maxlength="32" autocomplete="off" spellcheck="false" />
+      <label for="shareUrl">Link</label>
+      <input type="text" id="shareUrl" readonly />
+      <button type="button" id="copyLinkBtn" class="primary">Kopieer</button>
+      <span class="sync-status connecting" id="syncStatus">
+        <span class="dot" aria-hidden="true"></span>
+        <span id="syncStatusText">Verbinden…</span>
+      </span>
+    </div>
   </div>
 
-  <div class="toolbar-row">
-    <button type="button" id="resetBtn">Alles terug naar TODO</button>
-    <span class="stats" id="stats"></span>
+  <div class="toolbar">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+      <input type="text" id="searchInput" placeholder="Zoek in backlog..." autocomplete="off" />
+    </div>
+    <div class="filters" id="categoryFilters">
+      <button type="button" class="filter-chip active" data-cat="all">Alles</button>
+    </div>
+    <div style="display: flex; gap: 0.75rem; align-items: center;">
+      <span class="stats" id="stats"></span>
+      <button type="button" id="resetBtn">Reset</button>
+    </div>
   </div>
 
   <main class="board" id="board"></main>
 
   <footer>
-    Bron: waar_knelt_het_schoentje.txt — Campus Het Spoor website-backlog
+    Campus Het Spoor — Website Backlog & Roadmap
   </footer>
 
   <script src="firebase-config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
   <script type="module">
-    const STORAGE_KEY = "campus-spoor-kanban-v1";
+    const STORAGE_KEY = "campus-spoor-kanban-v2";
     const DEFAULT_ROOM = "spoor";
 
     const INITIAL_TASKS = [
       { id: "1-1", category: "1. Beheer en gebruiksvriendelijkheid", title: "Simpeler beheer met drag-and-drop; minder ingewikkeld systeem" },
       { id: "1-2", category: "1. Beheer en gebruiksvriendelijkheid", title: "Onderhoudsvriendelijk voor beheerders, eenvoudige updates" },
       { id: "1-3", category: "1. Beheer en gebruiksvriendelijkheid", title: "Platform en toepassingen budgetvriendelijk houden" },
-      { id: "2-1", category: "2. Design, layout en schermresoluties", title: "Responsiviteit: GSM, tablet en laptop automatisch laten meeschalen" },
-      { id: "2-2", category: "2. Design, layout en schermresoluties", title: "Moderne, aantrekkelijke uitstraling (jong, professioneel voor ouders)" },
-      { id: "2-3", category: "2. Design, layout en schermresoluties", title: "Huisstijl: teksten en elementen in officiële schoolkleuren" },
-      { id: "2-4", category: "2. Design, layout en schermresoluties", title: "Overzichtelijkere navigatie en structuur (o.a. richtingen)" },
-      { id: "2-5", category: "2. Design, layout en schermresoluties", title: "Visuele afwerking: contrasten, homepage, gestylde Google Maps" },
-      { id: "3-1", category: "3. Visie, sfeer en content", title: "Pedagogische visie duidelijker, met Campus Het Spoor-identiteit" },
-      { id: "3-2", category: "3. Visie, sfeer en content", title: "Sfeer en eerste indruk: school laten leven, interactieve beleving" },
-      { id: "3-3", category: "3. Visie, sfeer en content", title: "Kernwaarden visueel uitbeelden (eigentijds leren, zelfstandigheid, samen, betrokken)" },
-      { id: "3-4", category: "3. Visie, sfeer en content", title: "Alleen passende, actuele schoolfoto's — geen willekeurige stock" },
-      { id: "3-5", category: "3. Visie, sfeer en content", title: "Klikbare foto's met extra informatie" },
-      { id: "4-1", category: "4. Studierichtingen en interactief spoor", title: "Overzicht graden, richtingen en lessentabellen begrijpelijker en visueler" },
-      { id: "4-2", category: "4. Studierichtingen en interactief spoor", title: "Interactieve roadmap / visueel spoor voor studiepad" },
-      { id: "4-3", category: "4. Studierichtingen en interactief spoor", title: "Spoorthema verder uitdiepen in interactieve onderdelen" },
-      { id: "5-1", category: "5. Schoolteam en contact", title: "Introductie van het schoolteam op de contactpagina" },
-      { id: "5-2", category: "5. Schoolteam en contact", title: "Transparante teamstructuur (groepen, vakken, leerkrachten)" },
-      { id: "5-3", category: "5. Schoolteam en contact", title: "Duidelijke contactgegevens en sociale media" },
-      { id: "6-1", category: "6. AI chatbot, mascot en zoekfunctie", title: "AI-chatbot subtiel (niet oppoppen, geen half scherm)" },
-      { id: "6-2", category: "6. AI chatbot, mascot en zoekfunctie", title: "Mascot/emoji/schoolrobot koppelen aan chatbot" },
-      { id: "6-3", category: "6. AI chatbot, mascot en zoekfunctie", title: "FAQ, schoolreglement en inschrijving in chatbot-kennisbank" },
-      { id: "6-4", category: "6. AI chatbot, mascot en zoekfunctie", title: "Logging gesprekken + e-mail fallback bij onbeantwoorde vragen" },
-      { id: "6-5", category: "6. AI chatbot, mascot en zoekfunctie", title: "Duidelijke zoekbalk op de website" },
-      { id: "7-1", category: "7. Veiligheid, juridisch, formulieren", title: "Beveiliging verbeteren; geen open admin-panels; minder host-afhankelijkheid" },
-      { id: "7-2", category: "7. Veiligheid, juridisch, formulieren", title: "Volledige rechten op foto's en content (copyright)" },
-      { id: "7-3", category: "7. Veiligheid, juridisch, formulieren", title: "Subtiele cookie- en privacyweergave" },
-      { id: "7-4", category: "7. Veiligheid, juridisch, formulieren", title: "Google Bedrijfsprofiel claimen; Maps-foto's en reviews" },
-      { id: "7-5", category: "7. Veiligheid, juridisch, formulieren", title: "Sollicitaties/vacatures: toestemming directie bij proceswijziging; formulieren naar directie" },
+      { id: "2-1", category: "2. Design en layout", title: "Responsiviteit: GSM, tablet en laptop automatisch laten meeschalen" },
+      { id: "2-2", category: "2. Design en layout", title: "Moderne, aantrekkelijke uitstraling (jong, professioneel voor ouders)" },
+      { id: "2-3", category: "2. Design en layout", title: "Huisstijl: teksten en elementen in officiële schoolkleuren" },
+      { id: "2-4", category: "2. Design en layout", title: "Overzichtelijkere navigatie en structuur (o.a. richtingen)" },
+      { id: "2-5", category: "2. Design en layout", title: "Visuele afwerking: contrasten, homepage, gestylde Google Maps" },
+      { id: "3-1", category: "3. Visie en sfeer", title: "Pedagogische visie duidelijker, met Campus Het Spoor-identiteit" },
+      { id: "3-2", category: "3. Visie en sfeer", title: "Sfeer en eerste indruk: school laten leven, interactieve beleving" },
+      { id: "3-3", category: "3. Visie en sfeer", title: "Kernwaarden visueel uitbeelden (eigentijds leren, zelfstandigheid, samen, betrokken)" },
+      { id: "3-4", category: "3. Visie en sfeer", title: "Alleen passende, actuele schoolfoto's — geen willekeurige stock" },
+      { id: "3-5", category: "3. Visie en sfeer", title: "Klikbare foto's met extra informatie" },
+      { id: "4-1", category: "4. Studierichtingen", title: "Overzicht graden, richtingen en lessentabellen begrijpelijker en visueler" },
+      { id: "4-2", category: "4. Studierichtingen", title: "Interactieve roadmap / visueel spoor voor studiepad" },
+      { id: "4-3", category: "4. Studierichtingen", title: "Spoorthema verder uitdiepen in interactieve onderdelen" },
+      { id: "5-1", category: "5. Team en contact", title: "Introductie van het schoolteam op de contactpagina" },
+      { id: "5-2", category: "5. Team en contact", title: "Transparante teamstructuur (groepen, vakken, leerkrachten)" },
+      { id: "5-3", category: "5. Team en contact", title: "Duidelijke contactgegevens en sociale media" },
+      { id: "6-1", category: "6. AI chatbot en zoek", title: "AI-chatbot subtiel (niet oppoppen, geen half scherm)" },
+      { id: "6-2", category: "6. AI chatbot en zoek", title: "Mascot/emoji/schoolrobot koppelen aan chatbot" },
+      { id: "6-3", category: "6. AI chatbot en zoek", title: "FAQ, schoolreglement en inschrijving in chatbot-kennisbank" },
+      { id: "6-4", category: "6. AI chatbot en zoek", title: "Logging gesprekken + e-mail fallback bij onbeantwoorde vragen" },
+      { id: "6-5", category: "6. AI chatbot en zoek", title: "Duidelijke zoekbalk op de website" },
+      { id: "7-1", category: "7. Veiligheid en recht", title: "Beveiliging verbeteren; geen open admin-panels; minder host-afhankelijkheid" },
+      { id: "7-2", category: "7. Veiligheid en recht", title: "Volledige rechten op foto's en content (copyright)" },
+      { id: "7-3", category: "7. Veiligheid en recht", title: "Subtiele cookie- en privacyweergave" },
+      { id: "7-4", category: "7. Veiligheid en recht", title: "Google Bedrijfsprofiel claimen; Maps-foto's en reviews" },
+      { id: "7-5", category: "7. Veiligheid en recht", title: "Sollicitaties/vacatures: toestemming directie bij proceswijziging; formulieren naar directie" },
     ];
 
     const STATUSES = ["todo", "doing", "done"];
     const LABELS = { todo: "Todo", doing: "Doing", done: "Done" };
 
-    const clientId =
-      sessionStorage.getItem("kanban-client-id") ||
-      (() => {
-        const id = crypto.randomUUID();
-        sessionStorage.setItem("kanban-client-id", id);
-        return id;
-      })();
+    const clientId = sessionStorage.getItem("kanban-client-id") || (() => {
+      const id = crypto.randomUUID();
+      sessionStorage.setItem("kanban-client-id", id);
+      return id;
+    })();
 
     let state = loadState();
+    let currentFilter = "all";
+    let searchQuery = "";
     let applyingRemote = false;
     let syncPushTimer = null;
     let syncMode = "local";
-    /** @type {import('firebase/database').Unsubscribe | null} */
     let firebaseUnsub = null;
-    /** @type {import('y-webrtc').WebrtcProvider | null} */
     let webrtcProvider = null;
 
     function sanitizeRoom(raw) {
-      const s = String(raw || "")
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9-]/g, "")
-        .slice(0, 32);
-      return s || DEFAULT_ROOM;
+      return String(raw || "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 32) || DEFAULT_ROOM;
     }
 
     function getRoomId() {
@@ -458,14 +536,12 @@
     function setRoomInUrl(roomId) {
       const params = new URLSearchParams(location.search);
       params.set("room", roomId);
-      const next = `${location.pathname}?${params.toString()}`;
-      history.replaceState(null, "", next);
+      history.replaceState(null, "", `${location.pathname}?${params.toString()}`);
     }
 
     function getShareUrl() {
-      const room = getRoomId();
       const params = new URLSearchParams();
-      params.set("room", room);
+      params.set("room", getRoomId());
       return `${location.origin}${location.pathname}?${params.toString()}`;
     }
 
@@ -475,9 +551,9 @@
 
     function defaultState() {
       return {
-        tasks: INITIAL_TASKS.map((t) => ({ ...t, status: "todo", checked: false })),
+        tasks: INITIAL_TASKS.map(t => ({ ...t, status: "todo", checked: false })),
         updatedAt: 0,
-        clientId: "",
+        clientId: ""
       };
     }
 
@@ -488,7 +564,7 @@
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed.tasks) && parsed.tasks.length) {
             parsed.updatedAt = parsed.updatedAt || 0;
-            normalizeTasks(parsed.tasks);
+            parsed.tasks.forEach(t => { if (t.status === "done") t.checked = true; });
             return parsed;
           }
         }
@@ -509,25 +585,9 @@
       syncPushTimer = setTimeout(pushStateToPeers, 120);
     }
 
-    function normalizeTasks(tasks) {
-      tasks.forEach((t) => {
-        if (t.status === "done") t.checked = true;
-      });
-    }
-
     function fireConfetti() {
       if (typeof confetti !== "function") return;
-      const n = 100;
-      const base = { origin: { y: 0.62 }, zIndex: 9999, colors: ["#3b82f6", "#f59e0b", "#10b981", "#ffffff"] };
-      confetti({ ...base, particleCount: n * 0.25, spread: 26, startVelocity: 55 });
-      confetti({ ...base, particleCount: n * 0.2, spread: 60 });
-      confetti({ ...base, particleCount: n * 0.35, spread: 100, decay: 0.91, scalar: 0.85 });
-      confetti({ ...base, particleCount: n * 0.2, spread: 120, startVelocity: 35 });
-    }
-
-    function detectNewlyCompleted(prevTasks, nextTasks) {
-      const prev = new Map(prevTasks.map((t) => [t.id, t.status]));
-      return nextTasks.some((t) => t.status === "done" && prev.get(t.id) !== "done");
+      confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
     }
 
     function applyRemoteState(remote) {
@@ -535,15 +595,11 @@
       const remoteAt = remote.updatedAt || 0;
       if (remoteAt < (state.updatedAt || 0)) return;
       if (remoteAt === state.updatedAt && remote.clientId === state.clientId) return;
-      const prevTasks = state.tasks.map((t) => ({ id: t.id, status: t.status }));
+      const prevTasks = new Map(state.tasks.map(t => [t.id, t.status]));
       applyingRemote = true;
-      state = {
-        tasks: remote.tasks,
-        updatedAt: remoteAt,
-        clientId: remote.clientId || "",
-      };
-      normalizeTasks(state.tasks);
-      const celebrate = detectNewlyCompleted(prevTasks, state.tasks);
+      state = { tasks: remote.tasks, updatedAt: remoteAt, clientId: remote.clientId || "" };
+      state.tasks.forEach(t => { if (t.status === "done") t.checked = true; });
+      const celebrate = state.tasks.some(t => t.status === "done" && prevTasks.get(t.id) !== "done");
       localStorage.setItem(storageKey(), JSON.stringify(state));
       render();
       applyingRemote = false;
@@ -570,13 +626,13 @@
         await set(ref(firebaseDb, `rooms/${getRoomId()}`), {
           tasks: state.tasks,
           updatedAt: state.updatedAt,
-          clientId: state.clientId,
+          clientId: state.clientId
         });
       } else if (syncMode === "webrtc" && yMap) {
         yMap.set("payload", {
           tasks: state.tasks,
           updatedAt: state.updatedAt,
-          clientId: state.clientId,
+          clientId: state.clientId
         });
       }
     }
@@ -586,12 +642,8 @@
     let yMap = null;
 
     async function initFirebaseSync(cfg) {
-      firebaseApi = await import(
-        "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js"
-      );
-      const { initializeApp } = await import(
-        "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js"
-      );
+      firebaseApi = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js");
+      const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js");
       const app = initializeApp(cfg);
       firebaseDb = firebaseApi.getDatabase(app);
       syncMode = "firebase";
@@ -612,13 +664,8 @@
       const { WebrtcProvider } = await import("https://esm.sh/y-webrtc@10.3.0");
 
       const ydoc = new Y.Doc();
-      const room = getRoomId();
-      webrtcProvider = new WebrtcProvider(room, ydoc, {
-        signaling: [
-          "wss://signaling.yjs.dev",
-          "wss://y-webrtc-eu.fly.dev",
-          "wss://y-webrtc-us.fly.dev",
-        ],
+      webrtcProvider = new WebrtcProvider(getRoomId(), ydoc, {
+        signaling: ["wss://signaling.yjs.dev", "wss://y-webrtc-eu.fly.dev"]
       });
       yMap = ydoc.getMap("kanban");
       syncMode = "webrtc";
@@ -631,7 +678,7 @@
 
       const updatePresence = () => {
         const n = webrtcProvider.awareness.getStates().size;
-        setSyncStatus("live", n > 1 ? `Live · ${n} personen` : "Live · wacht op anderen");
+        setSyncStatus("live", n > 1 ? `Live · ${n} personen` : "Live · lokaal actief");
       };
       webrtcProvider.awareness.on("change", updatePresence);
       updatePresence();
@@ -648,19 +695,13 @@
       setSyncStatus("connecting", "Verbinden…");
       updateShareUi();
       const cfg = window.FIREBASE_CONFIG;
-      const hasFirebase =
-        cfg && cfg.apiKey && cfg.databaseURL && cfg.databaseURL.startsWith("https://");
-
+      const hasFirebase = cfg && cfg.apiKey && cfg.databaseURL && cfg.databaseURL.startsWith("https://");
       try {
-        if (hasFirebase) {
-          await initFirebaseSync(cfg);
-        } else {
-          await initWebRtcSync();
-        }
+        if (hasFirebase) await initFirebaseSync(cfg);
+        else await initWebRtcSync();
       } catch (err) {
-        console.warn("Sync niet beschikbaar:", err);
         syncMode = "local";
-        setSyncStatus("connecting", "Alleen lokaal — vul firebase-config.js in voor betrouwbare sync");
+        setSyncStatus("connecting", "Lokaal opgeslagen");
       }
     }
 
@@ -679,58 +720,91 @@
       initSync();
     }
 
-    function applyStatusChange(task, status, previousStatus) {
-      task.status = status;
-      if (status === "done") {
-        task.checked = true;
-        if (previousStatus !== "done") fireConfetti();
-      } else {
-        task.checked = false;
-      }
-    }
-
     function moveTask(id, direction) {
-      const task = state.tasks.find((t) => t.id === id);
+      const task = state.tasks.find(t => t.id === id);
       if (!task) return;
       const idx = STATUSES.indexOf(task.status);
       const next = idx + direction;
       if (next < 0 || next >= STATUSES.length) return;
-      const previousStatus = task.status;
-      applyStatusChange(task, STATUSES[next], previousStatus);
+      const prevStatus = task.status;
+      task.status = STATUSES[next];
+      if (task.status === "done") {
+        task.checked = true;
+        if (prevStatus !== "done") fireConfetti();
+      } else {
+        task.checked = false;
+      }
       saveState();
       render();
     }
 
     function setStatus(id, status) {
-      const task = state.tasks.find((t) => t.id === id);
+      const task = state.tasks.find(t => t.id === id);
       if (!task || task.status === status) return;
-      const previousStatus = task.status;
-      applyStatusChange(task, status, previousStatus);
-      saveState();
-      render();
-    }
-
-    function toggleChecked(id, checked) {
-      const task = state.tasks.find((t) => t.id === id);
-      if (!task) return;
-      const wasCompleted = task.status === "done" && task.checked;
-      task.checked = checked;
-      if (checked) {
-        if (task.status !== "done") {
-          task.status = "done";
-          if (!wasCompleted) fireConfetti();
-        }
+      const prevStatus = task.status;
+      task.status = status;
+      if (status === "done") {
+        task.checked = true;
+        if (prevStatus !== "done") fireConfetti();
+      } else {
+        task.checked = false;
       }
       saveState();
       render();
     }
 
+    function toggleChecked(id, checked) {
+      const task = state.tasks.find(t => t.id === id);
+      if (!task) return;
+      const prevDone = task.status === "done" && task.checked;
+      task.checked = checked;
+      if (checked) {
+        task.status = "done";
+        if (!prevDone) fireConfetti();
+      }
+      saveState();
+      render();
+    }
+
+    function setupFilters() {
+      const container = document.getElementById("categoryFilters");
+      const categories = [...new Set(INITIAL_TASKS.map(t => t.category))];
+      
+      // Keep "Alles" button, remove others before rebuilding
+      container.innerHTML = '<button type="button" class="filter-chip active" data-cat="all">Alles</button>';
+
+      categories.forEach(cat => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "filter-chip";
+        btn.dataset.cat = cat;
+        // Shorten label for display
+        btn.textContent = cat.replace(/^\d+\.\s*/, "");
+        btn.addEventListener("click", () => {
+          document.querySelectorAll(".filter-chip").forEach(c => c.classList.remove("active"));
+          btn.classList.add("active");
+          currentFilter = cat;
+          render();
+        });
+        container.appendChild(btn);
+      });
+
+      container.querySelector('[data-cat="all"]').addEventListener("click", () => {
+        document.querySelectorAll(".filter-chip").forEach(c => c.classList.remove("active"));
+        container.querySelector('[data-cat="all"]').classList.add("active");
+        currentFilter = "all";
+        render();
+      });
+    }
+
     function updateStats() {
       const total = state.tasks.length;
-      const doneChecked = state.tasks.filter((t) => t.checked).length;
-      const inDone = state.tasks.filter((t) => t.status === "done").length;
-      document.getElementById("stats").textContent =
-        `${doneChecked} afgevinkt · ${inDone} in Done · ${total} totaal`;
+      const inDone = state.tasks.filter(t => t.status === "done").length;
+      document.getElementById("stats").textContent = `${inDone} van ${total} voltooid`;
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     }
 
     function renderCard(task) {
@@ -751,13 +825,12 @@
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
       checkbox.checked = task.checked;
-      checkbox.title = "Taak afvinken";
       checkbox.addEventListener("change", () => toggleChecked(task.id, checkbox.checked));
 
       const body = document.createElement("div");
       body.className = "card-body";
-      body.innerHTML =
-        `<div class="card-category">${escapeHtml(task.category)}</div>` +
+      body.innerHTML = 
+        `<div class="card-category">${escapeHtml(task.category.replace(/^\d+\.\s*/, ""))}</div>` +
         `<p class="card-title">${escapeHtml(task.title)}</p>`;
 
       top.appendChild(checkbox);
@@ -770,7 +843,7 @@
       if (task.status !== "todo") {
         const back = document.createElement("button");
         back.type = "button";
-        back.textContent = "← Terug";
+        back.textContent = "← Vorige";
         back.addEventListener("click", () => moveTask(task.id, -1));
         actions.appendChild(back);
       }
@@ -786,32 +859,30 @@
       return card;
     }
 
-    function escapeHtml(s) {
-      return s
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-    }
-
     function render() {
       const board = document.getElementById("board");
       board.innerHTML = "";
 
-      STATUSES.forEach((status) => {
+      const query = searchQuery.toLowerCase().trim();
+
+      STATUSES.forEach(status => {
         const col = document.createElement("section");
         col.className = "column";
         col.dataset.status = status;
 
-        const tasksHere = state.tasks.filter((t) => t.status === status);
+        const tasksHere = state.tasks.filter(t => {
+          if (t.status !== status) return false;
+          if (currentFilter !== "all" && t.category !== currentFilter) return false;
+          if (query && !t.title.toLowerCase().includes(query) && !t.category.toLowerCase().includes(query)) return false;
+          return true;
+        });
 
-        col.innerHTML =
+        col.innerHTML = 
           `<div class="column-header"><span>${LABELS[status]}</span>` +
           `<span class="count">${tasksHere.length}</span></div>`;
 
         const cards = document.createElement("div");
         cards.className = "cards";
-        cards.dataset.status = status;
 
         cards.addEventListener("dragover", (e) => {
           e.preventDefault();
@@ -825,7 +896,7 @@
           setStatus(id, status);
         });
 
-        tasksHere.forEach((t) => cards.appendChild(renderCard(t)));
+        tasksHere.forEach(t => cards.appendChild(renderCard(t)));
         col.appendChild(cards);
         board.appendChild(col);
       });
@@ -833,44 +904,36 @@
       updateStats();
     }
 
+    document.getElementById("searchInput").addEventListener("input", (e) => {
+      searchQuery = e.target.value;
+      render();
+    });
+
     document.getElementById("resetBtn").addEventListener("click", () => {
-      if (!confirm("Alle kaarten terug naar TODO en vinkjes wissen?")) return;
+      if (!confirm("Alle kaarten terugzetten naar TODO?")) return;
       state = defaultState();
       saveState();
       render();
     });
 
     document.getElementById("copyLinkBtn").addEventListener("click", async () => {
-      const url = getShareUrl();
       try {
-        await navigator.clipboard.writeText(url);
+        await navigator.clipboard.writeText(getShareUrl());
         const btn = document.getElementById("copyLinkBtn");
-        const prev = btn.textContent;
         btn.textContent = "Gekopieerd!";
-        setTimeout(() => {
-          btn.textContent = prev;
-        }, 2000);
-      } catch (_) {
-        document.getElementById("shareUrl").select();
-        document.execCommand("copy");
-      }
+        setTimeout(() => { btn.textContent = "Kopieer"; }, 2000);
+      } catch (_) {}
     });
 
     document.getElementById("roomInput").addEventListener("change", (e) => {
       switchRoom(e.target.value);
-    });
-    document.getElementById("roomInput").addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        e.target.blur();
-        switchRoom(e.target.value);
-      }
     });
 
     if (!new URLSearchParams(location.search).has("room")) {
       setRoomInUrl(DEFAULT_ROOM);
     }
 
+    setupFilters();
     render();
     updateShareUi();
     initSync();
