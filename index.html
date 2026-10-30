@@ -38,7 +38,6 @@
       flex-direction: column;
     }
 
-    /* Modal Overlay voor Username */
     .modal-overlay {
       position: fixed;
       inset: 0;
@@ -155,6 +154,7 @@
       display: flex;
       flex-direction: column;
       gap: 1rem;
+      width: 100%;
     }
 
     .share-bar {
@@ -212,6 +212,9 @@
       text-transform: uppercase;
       letter-spacing: 0.05em;
       margin-bottom: 0.75rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
 
     .users-grid {
@@ -228,6 +231,13 @@
       display: flex;
       flex-direction: column;
       gap: 0.4rem;
+      transition: all 0.2s ease;
+    }
+
+    .user-card.active-action {
+      border-color: var(--primary);
+      background: var(--todo-bg);
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
     }
 
     .user-header {
@@ -255,6 +265,15 @@
     .user-badge.you {
       background: var(--todo-bg);
       color: var(--primary);
+    }
+
+    .user-activity-status {
+      font-size: 0.72rem;
+      color: var(--primary);
+      font-style: italic;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .user-stats-text {
@@ -349,6 +368,7 @@
       gap: 1rem;
       align-items: center;
       justify-content: space-between;
+      width: 100%;
     }
 
     .search-box {
@@ -584,7 +604,6 @@
   </style>
 </head>
 <body>
-  <!-- Modal voor verplichte username-controle -->
   <div class="modal-overlay" id="usernameModal">
     <div class="modal-card">
       <h2>Welkom bij Campus Het Spoor</h2>
@@ -621,7 +640,10 @@
     </div>
 
     <div class="active-users-panel">
-      <div class="active-users-title">Actieve Gebruikers in dit Document</div>
+      <div class="active-users-title">
+        <span>Actieve Gebruikers & Live Activiteit</span>
+        <span id="activePeerCount" style="font-size: 0.75rem; font-weight: 600; color: var(--primary);">0 online</span>
+      </div>
       <div class="users-grid" id="usersGrid"></div>
     </div>
   </div>
@@ -649,7 +671,7 @@
   <script src="firebase-config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
   <script type="module">
-    const STORAGE_KEY = "campus-spoor-kanban-v4";
+    const STORAGE_KEY = "campus-spoor-kanban-v5";
     const DEFAULT_ROOM = "spoor";
 
     const INITIAL_TASKS = [
@@ -699,20 +721,21 @@
     })();
 
     let userName = localStorage.getItem("kanban-user-name") || "";
+    let currentActivity = "Kijkt naar het bord";
+    let activityTimer = null;
+
+    function setActivity(text) {
+      currentActivity = text;
+      broadcastPresence();
+    }
 
     function validateUsername(name) {
       const trimmed = String(name || "").trim();
-      if (trimmed.length < 3) {
-        return "Naam moet minstens 3 letters bevatten.";
-      }
-      if (/\d/.test(trimmed)) {
-        return "Nummers zijn niet toegestaan in je naam.";
-      }
+      if (trimmed.length < 3) return "Naam moet minstens 3 letters bevatten.";
+      if (/\d/.test(trimmed)) return "Nummers zijn niet toegestaan in je naam.";
       const lower = trimmed.toLowerCase();
       for (const word of FORBIDDEN_WORDS) {
-        if (lower.includes(word)) {
-          return "Gelieve een gepaste naam te gebruiken.";
-        }
+        if (lower.includes(word)) return "Gelieve een gepaste naam te gebruiken.";
       }
       return null;
     }
@@ -723,8 +746,12 @@
     let applyingRemote = false;
     let syncPushTimer = null;
     let syncMode = "local";
-    let firebaseUnsub = null;
+    let firebaseDb = null;
+    let firebaseApi = null;
+    let rtdbUnsub = null;
     let webrtcProvider = null;
+    let webrtcDoc = null;
+    let remotePeersMap = new Map();
 
     function sanitizeRoom(raw) {
       return String(raw || "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 32) || DEFAULT_ROOM;
@@ -784,7 +811,7 @@
 
     function scheduleSyncPush() {
       clearTimeout(syncPushTimer);
-      syncPushTimer = setTimeout(pushStateToPeers, 120);
+      syncPushTimer = setTimeout(pushStateToPeers, 100);
     }
 
     function fireConfetti() {
@@ -823,7 +850,7 @@
       document.getElementById("userNameInput").value = userName;
     }
 
-    function renderActiveUsers(users = []) {
+    function renderActiveUsers() {
       const grid = document.getElementById("usersGrid");
       grid.innerHTML = "";
 
@@ -831,39 +858,82 @@
       const doneCount = state.tasks.filter(t => t.status === "done").length;
       const boardPercent = Math.round((doneCount / totalTasks) * 100);
 
-      const displayUsers = users.length > 0 ? users : [{
+      const allUsers = [];
+      // Voeg jezelf toe
+      allUsers.push({
         id: clientId,
-        name: userName,
+        name: userName || "Jij",
         completed: doneCount,
         percent: boardPercent,
+        activity: currentActivity,
         isSelf: true
-      }];
+      });
 
-      displayUsers.forEach(u => {
-        const isSelf = u.id === clientId || u.isSelf;
+      // Voeg alle actieve peers toe uit de actieve map
+      remotePeersMap.forEach((peerData) => {
+        if (peerData.clientId !== clientId && peerData.name) {
+          allUsers.push({
+            id: peerData.clientId,
+            name: peerData.name,
+            completed: peerData.completed || 0,
+            percent: peerData.percent || 0,
+            activity: peerData.activity || "Actief in document",
+            isSelf: false
+          });
+        }
+      });
+
+      document.getElementById("activePeerCount").textContent = `${allUsers.length} online`;
+
+      allUsers.forEach(u => {
         const card = document.createElement("div");
-        card.className = "user-card";
-
-        const uPercent = u.percent !== undefined ? u.percent : boardPercent;
-        const uCompleted = u.completed !== undefined ? u.completed : doneCount;
+        card.className = "user-card" + (u.activity && u.activity !== "Kijkt naar het bord" ? " active-action" : "");
 
         card.innerHTML = `
           <div class="user-header">
             <span class="user-name">
-              ${escapeHtml(u.name || "Anoniem")}
-              ${isSelf ? '<span class="user-badge you">Jij</span>' : ''}
+              ${escapeHtml(u.name)}
+              ${u.isSelf ? '<span class="user-badge you">Jij</span>' : ''}
             </span>
-            <span style="font-weight:700; font-size:0.8rem; color: var(--done);">${uPercent}%</span>
+            <span style="font-weight:700; font-size:0.8rem; color: var(--done);">${u.percent}%</span>
           </div>
+          <div class="user-activity-status">⚡ ${escapeHtml(u.activity)}</div>
           <div class="user-progress-bg">
-            <div class="user-progress-fill" style="width: ${uPercent}%;"></div>
+            <div class="user-progress-fill" style="width: ${u.percent}%;"></div>
           </div>
           <div class="user-stats-text">
-            <span>Voltooid: ${uCompleted}/${totalTasks}</span>
+            <span>Voltooid: ${u.completed}/${totalTasks}</span>
           </div>
         `;
         grid.appendChild(card);
       });
+    }
+
+    async function broadcastPresence() {
+      const doneCount = state.tasks.filter(t => t.status === "done").length;
+      const totalTasks = state.tasks.length || 1;
+      const percent = Math.round((doneCount / totalTasks) * 100);
+
+      const payload = {
+        clientId: clientId,
+        name: userName,
+        completed: doneCount,
+        percent: percent,
+        activity: currentActivity,
+        updatedAt: Date.now()
+      };
+
+      if (syncMode === "firebase" && firebaseDb) {
+        try {
+          const { ref, set } = firebaseApi;
+          await set(ref(firebaseDb, `rooms/${getRoomId()}/presence/${clientId}`), payload);
+        } catch (_) {}
+      } else if (syncMode === "webrtc" && webrtcProvider) {
+        try {
+          webrtcProvider.awareness.setLocalStateField("user", payload);
+        } catch (_) {}
+      }
+      renderActiveUsers();
     }
 
     async function pushStateToPeers() {
@@ -871,35 +941,25 @@
       const totalTasks = state.tasks.length || 1;
       const percent = Math.round((doneCount / totalTasks) * 100);
 
+      const data = {
+        tasks: state.tasks,
+        updatedAt: state.updatedAt,
+        clientId: state.clientId
+      };
+
       if (syncMode === "firebase" && firebaseDb) {
-        const { ref, set } = firebaseApi;
-        await set(ref(firebaseDb, `rooms/${getRoomId()}`), {
-          tasks: state.tasks,
-          updatedAt: state.updatedAt,
-          clientId: state.clientId
-        });
-      } else if (syncMode === "webrtc" && yMap) {
-        yMap.set("payload", {
-          tasks: state.tasks,
-          updatedAt: state.updatedAt,
-          clientId: state.clientId
-        });
-
-        if (webrtcProvider) {
-          webrtcProvider.awareness.setLocalStateField("user", {
-            id: clientId,
-            name: userName,
-            completed: doneCount,
-            percent: percent
-          });
-        }
+        try {
+          const { ref, set } = firebaseApi;
+          await set(ref(firebaseDb, `rooms/${getRoomId()}/state`), data);
+        } catch (_) {}
+      } else if (syncMode === "webrtc" && webrtcDoc) {
+        try {
+          const yMap = webrtcDoc.getMap("kanban");
+          yMap.set("payload", data);
+        } catch (_) {}
       }
-      renderActiveUsers();
+      broadcastPresence();
     }
-
-    let firebaseDb = null;
-    let firebaseApi = null;
-    let yMap = null;
 
     async function initFirebaseSync(cfg) {
       firebaseApi = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js");
@@ -908,14 +968,35 @@
       firebaseDb = firebaseApi.getDatabase(app);
       syncMode = "firebase";
 
-      const roomRef = firebaseApi.ref(firebaseDb, `rooms/${getRoomId()}`);
+      const stateRef = firebaseApi.ref(firebaseDb, `rooms/${getRoomId()}/state`);
       let seeded = false;
-      firebaseUnsub = firebaseApi.onValue(roomRef, (snap) => {
+      rtdbUnsub = firebaseApi.onValue(stateRef, (snap) => {
         const val = snap.val();
         if (val) applyRemoteState(val);
         else if (!seeded) pushStateToPeers();
         seeded = true;
         setSyncStatus("live", "Live · Firebase");
+      });
+
+      const presenceRef = firebaseApi.ref(firebaseDb, `rooms/${getRoomId()}/presence`);
+      firebaseApi.onValue(presenceRef, (snap) => {
+        const val = snap.val() || {};
+        remotePeersMap.clear();
+        Object.entries(val).forEach(([id, p]) => {
+          if (p && p.clientId !== clientId) {
+            // Check of peervlek niet langer dan 10 seconden geleden actief was
+            if (Date.now() - (p.updatedAt || 0) < 15000) {
+              remotePeersMap.set(id, p);
+            }
+          }
+        });
+        renderActiveUsers();
+      });
+
+      // Zorg dat bij afsluiten de aanwezigheid wordt gewist
+      window.addEventListener("beforeunload", () => {
+        const { ref, remove } = firebaseApi;
+        remove(ref(firebaseDb, `rooms/${getRoomId()}/presence/${clientId}`));
       });
     }
 
@@ -923,11 +1004,11 @@
       const Y = await import("https://esm.sh/yjs@13.6.18");
       const { WebrtcProvider } = await import("https://esm.sh/y-webrtc@10.3.0");
 
-      const ydoc = new Y.Doc();
-      webrtcProvider = new WebrtcProvider(getRoomId(), ydoc, {
-        signaling: ["wss://signaling.yjs.dev", "wss://y-webrtc-eu.fly.dev"]
+      webrtcDoc = new Y.Doc();
+      webrtcProvider = new WebrtcProvider(getRoomId(), webrtcDoc, {
+        signaling: ["wss://signaling.yjs.dev", "wss://y-webrtc-eu.fly.dev", "wss://signaling.eu.yjs.dev"]
       });
-      yMap = ydoc.getMap("kanban");
+      const yMap = webrtcDoc.getMap("kanban");
       syncMode = "webrtc";
 
       yMap.observe((event) => {
@@ -936,29 +1017,22 @@
         if (payload) applyRemoteState(payload);
       });
 
-      const updatePresence = () => {
+      const updateAwareness = () => {
         const states = Array.from(webrtcProvider.awareness.getStates().values());
-        const activeUsers = states
-          .map(s => s.user)
-          .filter(Boolean);
-
+        remotePeersMap.clear();
+        states.forEach(st => {
+          if (st.user && st.user.clientId !== clientId) {
+            remotePeersMap.set(st.user.clientId, st.user);
+          }
+        });
         const n = webrtcProvider.awareness.getStates().size;
         setSyncStatus("live", n > 1 ? `Live · ${n} personen` : "Live · lokaal actief");
-        renderActiveUsers(activeUsers);
+        renderActiveUsers();
       };
 
-      webrtcProvider.awareness.on("change", updatePresence);
-
-      const doneCount = state.tasks.filter(t => t.status === "done").length;
-      const totalTasks = state.tasks.length || 1;
-      webrtcProvider.awareness.setLocalStateField("user", {
-        id: clientId,
-        name: userName,
-        completed: doneCount,
-        percent: Math.round((doneCount / totalTasks) * 100)
-      });
-
-      updatePresence();
+      webrtcProvider.awareness.on("change", updateAwareness);
+      broadcastPresence();
+      updateAwareness();
 
       const existing = yMap.get("payload");
       if (existing && (existing.updatedAt || 0) > (state.updatedAt || 0)) {
@@ -986,16 +1060,25 @@
     function switchRoom(newRoomRaw) {
       const newRoom = sanitizeRoom(newRoomRaw);
       if (newRoom === getRoomId()) return;
-      if (firebaseUnsub) firebaseUnsub();
+      if (rtdbUnsub) rtdbUnsub();
       if (webrtcProvider) webrtcProvider.destroy();
-      firebaseUnsub = null;
+      rtdbUnsub = null;
       webrtcProvider = null;
       firebaseDb = null;
-      yMap = null;
+      webrtcDoc = null;
+      remotePeersMap.clear();
       setRoomInUrl(newRoom);
       state = loadState();
       render();
       initSync();
+    }
+
+    function triggerActivityFlash(text) {
+      setActivity(text);
+      clearTimeout(activityTimer);
+      activityTimer = setTimeout(() => {
+        setActivity("Kijkt naar het bord");
+      }, 4000);
     }
 
     function moveTask(id, direction) {
@@ -1012,6 +1095,7 @@
       } else {
         task.checked = false;
       }
+      triggerActivityFlash(`Verplaatste "${task.title.slice(0, 20)}..." naar ${LABELS[task.status]}`);
       saveState();
       render();
     }
@@ -1027,6 +1111,7 @@
       } else {
         task.checked = false;
       }
+      triggerActivityFlash(`Zette "${task.title.slice(0, 20)}..." in ${LABELS[status]}`);
       saveState();
       render();
     }
@@ -1040,6 +1125,7 @@
         task.status = "done";
         if (!prevDone) fireConfetti();
       }
+      triggerActivityFlash(checked ? `Vinkte "${task.title.slice(0, 20)}..." af` : `Haalde vinkje weg van "${task.title.slice(0, 20)}..."`);
       saveState();
       render();
     }
@@ -1060,6 +1146,7 @@
           document.querySelectorAll(".filter-chip").forEach(c => c.classList.remove("active"));
           btn.classList.add("active");
           currentFilter = cat;
+          triggerActivityFlash(`Filtert op ${cat.replace(/^\d+\.\s*/, "")}`);
           render();
         });
         container.appendChild(btn);
@@ -1200,7 +1287,7 @@
       localStorage.setItem("kanban-user-name", userName);
       document.getElementById("usernameModal").classList.add("hidden");
       updateShareUi();
-      pushStateToPeers();
+      initSync();
       return true;
     }
 
@@ -1224,17 +1311,21 @@
       }
       userName = val.trim();
       localStorage.setItem("kanban-user-name", userName);
-      pushStateToPeers();
+      broadcastPresence();
     });
 
     document.getElementById("searchInput").addEventListener("input", (e) => {
       searchQuery = e.target.value;
+      if (searchQuery.trim().length > 1) {
+        triggerActivityFlash(`Zoekt naar "${searchQuery}"`);
+      }
       render();
     });
 
     document.getElementById("resetBtn").addEventListener("click", () => {
       if (!confirm("Alle kaarten terugzetten naar TODO?")) return;
       state = defaultState();
+      triggerActivityFlash("Reset het volledige bord naar TODO");
       saveState();
       render();
     });
@@ -1259,6 +1350,11 @@
     setupFilters();
     render();
     updateShareUi();
+
+    // Periodieke heartbeat om te zorgen dat de status actief blijft
+    setInterval(() => {
+      if (userName) broadcastPresence();
+    }, 5000);
 
     if (!userName || validateUsername(userName) !== null) {
       document.getElementById("usernameModal").classList.remove("hidden");
