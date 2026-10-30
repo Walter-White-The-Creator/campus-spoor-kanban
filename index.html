@@ -757,7 +757,7 @@
   <script src="firebase-config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
   <script type="module">
-    const STORAGE_KEY = "campus-spoor-kanban-v7";
+    const STORAGE_KEY = "campus-spoor-kanban-v8";
     const DEFAULT_ROOM = "spoor";
     const ADMIN_KEY_SECRET = "spoor2026";
 
@@ -1113,7 +1113,6 @@
         isApproved = true;
       }
 
-      // Controleer goedkeuring
       const approvalRef = firebaseApi.ref(firebaseDb, `rooms/${getRoomId()}/approvals/${clientId}`);
       firebaseApi.onValue(approvalRef, (snap) => {
         const approved = snap.val();
@@ -1503,7 +1502,6 @@
       document.getElementById("usernameModal").classList.add("hidden");
       updateShareUi();
       
-      // Als niet-beheerder direct wachten op goedkeuring
       if (!isApproved) {
         document.getElementById("waitingModal").classList.remove("hidden");
       }
