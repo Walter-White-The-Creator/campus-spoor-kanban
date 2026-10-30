@@ -759,7 +759,7 @@
   <script type="module">
     const STORAGE_KEY = "campus-spoor-kanban-v7";
     const DEFAULT_ROOM = "spoor";
-    const ADMIN_KEY_SECRET = "spoor2026"; // Geheime beheerderssleutel
+    const ADMIN_KEY_SECRET = "spoor2026";
 
     const INITIAL_TASKS = [
       { id: "1-1", category: "1. Beheer en gebruiksvriendelijkheid", title: "Simpeler beheer met drag-and-drop; minder ingewikkeld systeem" },
@@ -1110,6 +1110,7 @@
       if (isAdmin) {
         const { ref, set } = firebaseApi;
         await set(ref(firebaseDb, `rooms/${getRoomId()}/approvals/${clientId}`), true);
+        isApproved = true;
       }
 
       // Controleer goedkeuring
@@ -1488,6 +1489,11 @@
         isApproved = true;
         localStorage.setItem(`kanban-is-admin:${getRoomId()}`, "true");
         localStorage.setItem(`kanban-approved:${getRoomId()}`, "true");
+      } else {
+        isAdmin = false;
+        isApproved = false;
+        localStorage.removeItem(`kanban-is-admin:${getRoomId()}`);
+        localStorage.removeItem(`kanban-approved:${getRoomId()}`);
       }
 
       inputEl.classList.remove("error");
@@ -1496,6 +1502,12 @@
       localStorage.setItem("kanban-user-name", userName);
       document.getElementById("usernameModal").classList.add("hidden");
       updateShareUi();
+      
+      // Als niet-beheerder direct wachten op goedkeuring
+      if (!isApproved) {
+        document.getElementById("waitingModal").classList.remove("hidden");
+      }
+
       initSync();
       return true;
     }
@@ -1568,6 +1580,9 @@
     if (!userName || validateUsername(userName) !== null) {
       document.getElementById("usernameModal").classList.remove("hidden");
     } else {
+      if (!isApproved && !isAdmin) {
+        document.getElementById("waitingModal").classList.remove("hidden");
+      }
       initSync();
     }
   </script>
