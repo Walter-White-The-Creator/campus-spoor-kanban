@@ -23,7 +23,7 @@ Op GitHub: **Settings → Pages → Custom domain** kun je een eigen domein kopp
 - **Deelnemer**: vult zijn naam in en komt in de wachtruimte tot de beheerder op **Toelaten** klikt. Geweigerd? Dan krijgt die persoon een melding en kan hij opnieuw aanvragen.
 - Een goedgekeurd toestel wordt onthouden (per kamer), maar moet wel telkens via het inlogscherm.
 - **Beheerder**: kies het tabblad *Beheerder* en vul het beheerderswachtwoord in. Je slaat de wachtruimte over en ziet bovenaan de nieuwe aanvragen.
-- Goedkeuren werkt alleen als de beheerder en de deelnemer tegelijk verbonden zijn via een werkende sync (Firebase of een signaalserver, zie hieronder).
+- De beheerder ziet bovenaan het blok **Toegangsaanvragen** met de knoppen **Toelaten** en **Weigeren**. Aanvragen verschijnen zolang de deelnemer in de wachtruimte staat (de beheerder moet dus ook online zijn).
 
 ### Beheerderswachtwoord wijzigen
 
@@ -38,29 +38,32 @@ Plak de uitkomst in `ADMIN_PASSWORD_HASH` in `index.html`.
 
 > Let op: dit is een statische site zonder eigen server. Alle controles gebeuren in de browser, dus iemand met technische kennis kan ze omzeilen. Voor echte beveiliging is een backend met authenticatie nodig (bijv. Firebase Auth of Supabase Auth met databaseregels).
 
-## Betrouwbare sync op school-WiFi
+## Live samenwerken
 
-**Belangrijk:** de openbare WebRTC-signaalservers van y-webrtc (`signaling.yjs.dev`, `y-webrtc-eu.fly.dev`) zijn offline. Zonder Firebase of een eigen signaalserver synchroniseert het bord niet tussen toestellen en kan de beheerder niemand toelaten. Een eigen signaalserver stel je in met `window.KANBAN_SIGNALING = ["wss://jouw-server"]` in `firebase-config.js`.
+Het bord synchroniseert standaard via **gratis publieke MQTT-servers** (EMQX, HiveMQ en Mosquitto, tegelijk voor reserve). Je hoeft niets in te stellen.
 
+- Verplaatst iemand een kaart, dan glijdt die bij iedereen binnen ongeveer een seconde naar de nieuwe kolom, met kort een paars label met de naam van wie hem verplaatste.
+- Elke kaart wordt apart samengevoegd: als twee mensen tegelijk verschillende kaarten verplaatsen, blijven beide wijzigingen bewaard.
+- De laatste toestand van het bord wordt op de server bewaard, dus wie later binnenkomt ziet meteen het actuele bord.
+- Eigen servers gebruiken? Zet `window.KANBAN_MQTT_BROKERS = ["wss://..."]` in `firebase-config.js`.
 
-Standaard gebruikt het bord **WebRTC** (geen account nodig). Op sommige netwerken werkt dat niet goed. Voor vaste live-sync:
+> Publieke servers zijn voor iedereen toegankelijk. Gebruik een unieke kamercode en zet er geen gevoelige gegevens op.
 
-1. Maak een gratis [Firebase](https://console.firebase.google.com/) project aan.  
-2. Schakel **Realtime Database** in (regio naar keuze).  
-3. Tijdelijke regels (alleen voor dit schoolproject):
+### Firebase (optioneel)
 
-   ```json
-   {
-     "rules": {
-       "rooms": {
-         "$roomId": { ".read": true, ".write": true }
-       }
-     }
-   }
-   ```
+Wil je liever een eigen database, maak dan een gratis [Firebase](https://console.firebase.google.com/) project met **Realtime Database** aan, gebruik deze tijdelijke regels:
 
-4. Kopieer `firebase-config.example.js` naar `firebase-config.js` en vul je projectgegevens in.  
-5. Push opnieuw naar GitHub — Pages deployt automatisch.
+```json
+{
+  "rules": {
+    "rooms": {
+      "$roomId": { ".read": true, ".write": true }
+    }
+  }
+}
+```
+
+en vul je gegevens in `firebase-config.js` in (zie `firebase-config.example.js`). Is Firebase ingevuld, dan gebruikt het bord Firebase in plaats van MQTT.
 
 ## Lokaal openen
 

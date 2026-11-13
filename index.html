@@ -199,6 +199,69 @@
       font-weight: 600;
     }
 
+    .card.remote-moved {
+      border-color: #a78bfa;
+      box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.35), var(--shadow-md);
+      animation: remoteGlow 1.6s ease-out 1;
+    }
+
+    @keyframes remoteGlow {
+      0% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.6), var(--shadow-md); }
+      100% { box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.35), var(--shadow-md); }
+    }
+
+    .remote-move-tag {
+      position: absolute;
+      top: -10px;
+      right: 10px;
+      background: #7c3aed;
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      box-shadow: var(--shadow-sm);
+      white-space: nowrap;
+      max-width: 70%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .admin-approval-banner.has-requests {
+      border-color: #f59e0b;
+      box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2), var(--shadow-sm);
+    }
+
+    .approval-empty {
+      font-size: 0.85rem;
+      color: #92400e;
+      opacity: 0.8;
+    }
+
+    .approval-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-shrink: 0;
+    }
+
+    .approval-actions button {
+      padding: 0.4rem 0.9rem;
+      font-size: 0.8rem;
+      cursor: pointer;
+      position: relative;
+      z-index: 1;
+    }
+
+    .approval-actions button.danger {
+      background: #fef2f2;
+      color: #b91c1c;
+      border-color: #fecaca;
+    }
+
+    .approval-actions button.danger:hover {
+      background: #fee2e2;
+    }
+
     header {
       background: var(--surface);
       border-bottom: 1px solid var(--border);
@@ -746,7 +809,7 @@
 
   <div class="top-controls">
     <div class="admin-approval-banner hidden" id="adminApprovalBanner">
-      <div class="admin-approval-title">🔐 Beheerdersgoedkeuring (Nieuwe aanvragen)</div>
+      <div class="admin-approval-title">🔐 Toegangsaanvragen</div>
       <div class="approval-list" id="approvalList"></div>
     </div>
 
@@ -890,8 +953,6 @@
     let firebaseDb = null;
     let firebaseApi = null;
     let rtdbUnsub = null;
-    let webrtcProvider = null;
-    let webrtcDoc = null;
     let remotePeersMap = new Map();
     let pendingRequestsMap = new Map();
 
@@ -944,7 +1005,6 @@
     }
 
     function saveState() {
-      if (applyingRemote) return;
       state.updatedAt = Date.now();
       state.clientId = clientId;
       localStorage.setItem(storageKey(), JSON.stringify(state));
@@ -953,7 +1013,7 @@
 
     function scheduleSyncPush() {
       clearTimeout(syncPushTimer);
-      syncPushTimer = setTimeout(pushStateToPeers, 100);
+      syncPushTimer = setTimeout(pushStateToPeers, 150);
     }
 
     function fireConfetti() {
@@ -961,20 +1021,71 @@
       confetti({ particleCount: 90, spread: 80, origin: { y: 0.6 } });
     }
 
+    // ---------- Samenvoegen van wijzigingen (per kaart, nieuwste wint) ----------
+    // Elke kaart krijgt een tijdstempel `u`. Zo gaan gelijktijdige verplaatsingen
+    // door verschillende mensen nooit verloren.
+    let logicalClock = 0;
+    const recentRemoteMoves = new Map(); // taskId -> { by, until }
+
+    function stampTask(task) {
+      logicalClock = Math.max(Date.now(), logicalClock + 1);
+      task.u = logicalClock;
+      task.by = userName;
+      task.byId = clientId;
+    }
+
     function applyRemoteState(remote) {
       if (!remote || !Array.isArray(remote.tasks)) return;
-      const remoteAt = remote.updatedAt || 0;
-      if (remoteAt < (state.updatedAt || 0)) return;
-      if (remoteAt === state.updatedAt && remote.clientId === state.clientId) return;
-      const prevTasks = new Map(state.tasks.map(t => [t.id, t.status]));
-      applyingRemote = true;
-      state = { tasks: remote.tasks, updatedAt: remoteAt, clientId: remote.clientId || "" };
-      state.tasks.forEach(t => { if (t.status === "done") t.checked = true; });
-      const celebrate = state.tasks.some(t => t.status === "done" && prevTasks.get(t.id) !== "done");
-      localStorage.setItem(storageKey(), JSON.stringify(state));
-      render();
-      applyingRemote = false;
-      if (celebrate) fireConfetti();
+      const localById = new Map(state.tasks.map(t => [t.id, t]));
+      const remoteById = new Map(remote.tasks.map(t => [t.id, t]));
+      const order = [...new Set([...state.tasks.map(t => t.id), ...remote.tasks.map(t => t.id)])];
+      let changed = false;
+      let localNewer = false;
+      let celebrate = false;
+      const merged = [];
+
+      order.forEach(id => {
+        const l = localById.get(id);
+        const r = remoteById.get(id);
+        if (r && r.u) logicalClock = Math.max(logicalClock, r.u);
+        if (!r) { merged.push(l); localNewer = true; return; }
+        if (!l) { merged.push({ ...r }); changed = true; return; }
+        const lu = l.u || 0;
+        const ru = r.u || 0;
+        if (ru > lu) {
+          if (r.status !== l.status || r.checked !== l.checked) {
+            if (r.byId !== clientId) {
+              recentRemoteMoves.set(id, { by: r.by || "Iemand", until: Date.now() + 4000 });
+            }
+            if (r.status === "done" && l.status !== "done") celebrate = true;
+          }
+          merged.push({ ...r });
+          changed = true;
+        } else {
+          if (lu > ru) localNewer = true;
+          merged.push(l);
+        }
+      });
+
+      if (changed) {
+        state.tasks = merged;
+        state.tasks.forEach(t => { if (t.status === "done") t.checked = true; });
+        state.updatedAt = Math.max(state.updatedAt || 0, remote.updatedAt || 0);
+        localStorage.setItem(storageKey(), JSON.stringify(state));
+        if (isApproved) render();
+        if (celebrate && isApproved) fireConfetti();
+        if (recentRemoteMoves.size) setTimeout(() => { pruneRemoteMoves(); }, 4100);
+      }
+      // Wij hebben nieuwere kaarten dan wat binnenkwam: stuur onze versie opnieuw,
+      // zodat iedereen (en de opgeslagen toestand op de server) gelijk loopt.
+      if (localNewer && isApproved) scheduleSyncPush();
+    }
+
+    function pruneRemoteMoves() {
+      const now = Date.now();
+      let removed = false;
+      recentRemoteMoves.forEach((v, k) => { if (v.until <= now) { recentRemoteMoves.delete(k); removed = true; } });
+      if (removed && isApproved) render();
     }
 
     function setSyncStatus(kind, text) {
@@ -1052,27 +1163,39 @@
       });
     }
 
+    let lastRequestCount = 0;
     function renderApprovalList() {
       if (!isAdmin) return;
       const banner = document.getElementById("adminApprovalBanner");
       const list = document.getElementById("approvalList");
       list.innerHTML = "";
+      banner.classList.remove("hidden");
 
-      const requests = Array.from(pendingRequestsMap.values());
+      const requests = Array.from(pendingRequestsMap.values()).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+      if (requests.length > lastRequestCount) {
+        document.title = `(${requests.length}) Nieuwe aanvraag — Kanban`;
+      } else if (requests.length === 0) {
+        document.title = "Kanban - Waar knelt het schoentje";
+      }
+      lastRequestCount = requests.length;
+      banner.classList.toggle("has-requests", requests.length > 0);
+
       if (requests.length === 0) {
-        banner.classList.add("hidden");
+        const empty = document.createElement("div");
+        empty.className = "approval-empty";
+        empty.textContent = "Geen openstaande aanvragen. Nieuwe deelnemers verschijnen hier automatisch.";
+        list.appendChild(empty);
         return;
       }
 
-      banner.classList.remove("hidden");
       requests.forEach(req => {
         const item = document.createElement("div");
         item.className = "approval-item";
         item.innerHTML = `
           <span>👤 ${escapeHtml(req.name)} wil deelnemen</span>
-          <div style="display: flex; gap: 0.5rem;">
-            <button type="button" class="primary" data-act="ok" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">Toelaten</button>
-            <button type="button" data-act="no" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">Weigeren</button>
+          <div class="approval-actions">
+            <button type="button" class="primary" data-act="ok">Toelaten</button>
+            <button type="button" class="danger" data-act="no">Weigeren</button>
           </div>
         `;
         item.querySelector('[data-act="ok"]').addEventListener("click", () => approveUser(req.deviceId));
@@ -1087,9 +1210,11 @@
         const { ref, set } = firebaseApi;
         await set(ref(firebaseDb, `rooms/${getRoomId()}/approvals/${targetId}`), true);
         await set(ref(firebaseDb, `rooms/${getRoomId()}/requests/${targetId}`), null);
-      } else if (syncMode === "webrtc" && webrtcDoc) {
-        webrtcDoc.getMap("approvals").set(targetId, true);
-        webrtcDoc.getMap("denials").delete(targetId);
+      } else if (syncMode === "mqtt") {
+        approvedDevices.add(targetId);
+        deniedDevices.delete(targetId);
+        mqttPublish(`deny/${targetId}`, null, true);
+        mqttPublish(`approve/${targetId}`, { approved: true, by: userName, at: Date.now() }, true);
       }
       pendingRequestsMap.delete(targetId);
       renderApprovalList();
@@ -1101,8 +1226,11 @@
         const { ref, set } = firebaseApi;
         await set(ref(firebaseDb, `rooms/${getRoomId()}/denials/${targetId}`), reqId || "x");
         await set(ref(firebaseDb, `rooms/${getRoomId()}/requests/${targetId}`), null);
-      } else if (syncMode === "webrtc" && webrtcDoc) {
-        webrtcDoc.getMap("denials").set(targetId, reqId || "x");
+      } else if (syncMode === "mqtt") {
+        approvedDevices.delete(targetId);
+        deniedDevices.set(targetId, reqId || "x");
+        mqttPublish(`approve/${targetId}`, null, true);
+        mqttPublish(`deny/${targetId}`, { requestId: reqId || "x", at: Date.now() }, true);
       }
       pendingRequestsMap.delete(targetId);
       renderApprovalList();
@@ -1130,17 +1258,12 @@
       isApproved = true;
       isDenied = false;
       localStorage.setItem(approvedStorageKey(), "true");
-      if (syncMode === "webrtc" && webrtcProvider) {
-        webrtcProvider.awareness.setLocalStateField("request", null);
-        const existing = webrtcDoc.getMap("kanban").get("payload");
-        if (existing) applyRemoteState(existing);
-      }
       unlockBoard();
       if (syncMode === "firebase" && firebaseDb) {
         attachFirebaseBoard();
-      } else {
-        const existing = webrtcDoc && webrtcDoc.getMap("kanban").get("payload");
-        if (!existing) pushStateToPeers(); else broadcastPresence();
+      } else if (syncMode === "mqtt") {
+        mqttPublish(`req/${deviceId}`, null, false);
+        attachMqttBoard();
       }
     }
 
@@ -1148,9 +1271,6 @@
       if (isApproved || isDenied) return;
       isDenied = true;
       localStorage.removeItem(approvedStorageKey());
-      if (syncMode === "webrtc" && webrtcProvider) {
-        webrtcProvider.awareness.setLocalStateField("request", null);
-      }
       document.getElementById("waitingTitle").textContent = "Toegang geweigerd";
       const t = document.getElementById("waitingText");
       t.textContent = "De beheerder heeft je aanvraag geweigerd. Je kan opnieuw inloggen om een nieuwe aanvraag te sturen.";
@@ -1158,40 +1278,36 @@
       document.getElementById("waitingStatusWrap").classList.add("hidden");
     }
 
-    async function broadcastPresence() {
-      if (!isApproved) return;
+    function presencePayload() {
       const doneCount = state.tasks.filter(t => t.status === "done").length;
       const totalTasks = state.tasks.length || 1;
-      const percent = Math.round((doneCount / totalTasks) * 100);
-
-      const payload = {
+      return {
         clientId: clientId,
         name: userName,
         completed: doneCount,
-        percent: percent,
+        percent: Math.round((doneCount / totalTasks) * 100),
         activity: currentActivity,
         isAdmin: isAdmin,
         updatedAt: Date.now()
       };
+    }
 
+    async function broadcastPresence() {
+      if (!isApproved) return;
+      const payload = presencePayload();
       if (syncMode === "firebase" && firebaseDb) {
         try {
           const { ref, set } = firebaseApi;
           await set(ref(firebaseDb, `rooms/${getRoomId()}/presence/${clientId}`), payload);
         } catch (_) {}
-      } else if (syncMode === "webrtc" && webrtcProvider) {
-        try {
-          webrtcProvider.awareness.setLocalStateField("user", payload);
-        } catch (_) {}
+      } else if (syncMode === "mqtt") {
+        mqttPublish(`presence/${clientId}`, payload, false);
       }
       renderActiveUsers();
     }
 
     async function pushStateToPeers() {
       if (!isApproved) return;
-      const doneCount = state.tasks.filter(t => t.status === "done").length;
-      const totalTasks = state.tasks.length || 1;
-
       const data = {
         tasks: state.tasks,
         updatedAt: state.updatedAt,
@@ -1203,11 +1319,8 @@
           const { ref, set } = firebaseApi;
           await set(ref(firebaseDb, `rooms/${getRoomId()}/state`), data);
         } catch (_) {}
-      } else if (syncMode === "webrtc" && webrtcDoc) {
-        try {
-          const yMap = webrtcDoc.getMap("kanban");
-          yMap.set("payload", data);
-        } catch (_) {}
+      } else if (syncMode === "mqtt") {
+        mqttPublish("state", data, true);
       }
       broadcastPresence();
     }
@@ -1290,89 +1403,201 @@
       broadcastPresence();
     }
 
-    async function initWebRtcSync() {
-      const Y = await import("https://esm.sh/yjs@13.6.18");
-      const { WebrtcProvider } = await import("https://esm.sh/y-webrtc@10.3.0?deps=yjs@13.6.18");
+    // ---------- Live sync zonder installatie: publieke MQTT-servers ----------
+    // Werkt meteen op GitHub Pages. We verbinden tegelijk met meerdere gratis
+    // servers; valt er één uit, dan loopt alles via de andere verder.
+    const MQTT_BROKERS = (Array.isArray(window.KANBAN_MQTT_BROKERS) && window.KANBAN_MQTT_BROKERS.length)
+      ? window.KANBAN_MQTT_BROKERS
+      : [
+          "wss://broker.emqx.io:8084/mqtt",
+          "wss://broker.hivemq.com:8884/mqtt",
+          "wss://test.mosquitto.org:8081/mqtt"
+        ];
+    const PRESENCE_TIMEOUT = 15000;
+    const REQUEST_TIMEOUT = 12000;
+    let mqttClients = [];
+    let mqttBoardAttached = false;
+    let mqttStateReceived = false;
+    const approvedDevices = new Set();
+    const deniedDevices = new Map(); // deviceId -> requestId
+    let requestTimer = null;
 
-      webrtcDoc = new Y.Doc();
-      webrtcProvider = new WebrtcProvider(getRoomId(), webrtcDoc, {
-        // Eigen signaalserver? Zet window.KANBAN_SIGNALING = ["wss://..."] in firebase-config.js
-        signaling: (Array.isArray(window.KANBAN_SIGNALING) && window.KANBAN_SIGNALING.length)
-          ? window.KANBAN_SIGNALING
-          : ["wss://signaling.yjs.dev", "wss://y-webrtc-eu.fly.dev"]
+    function mqttTopic(sub) {
+      return `campus-spoor-kanban/v2/${getRoomId()}/${sub}`;
+    }
+
+    function mqttConnectedCount() {
+      return mqttClients.filter(c => c.connected).length;
+    }
+
+    function mqttPublish(sub, obj, retain) {
+      const payload = obj == null ? "" : JSON.stringify(obj);
+      mqttClients.forEach(c => {
+        if (c.connected) {
+          try { c.publish(mqttTopic(sub), payload, { qos: 1, retain: !!retain }); } catch (_) {}
+        }
       });
-      const yMap = webrtcDoc.getMap("kanban");
-      const yApprovals = webrtcDoc.getMap("approvals");
-      const yDenials = webrtcDoc.getMap("denials");
-      syncMode = "webrtc";
+    }
 
-      yMap.observe((event) => {
-        if (event.transaction.local || !isApproved) return;
-        const payload = yMap.get("payload");
-        if (payload) applyRemoteState(payload);
+    function mqttSubscribe(subs) {
+      const topics = subs.map(mqttTopic);
+      mqttClients.forEach(c => {
+        if (c.connected) c.subscribe(topics, { qos: 1 });
       });
+    }
 
-      const checkMyApproval = () => {
-        if (isAdmin) return;
-        if (yApprovals.get(deviceId) === true) onApproved();
-        else if (!isApproved && requestId && yDenials.get(deviceId) === requestId) onDenied();
-      };
-      yApprovals.observe(() => { checkMyApproval(); updateAwareness(); });
-      yDenials.observe(() => { checkMyApproval(); updateAwareness(); });
+    function currentSubscriptions() {
+      const subs = ["presence/+", `approve/${deviceId}`, `deny/${deviceId}`];
+      if (isAdmin) subs.push("req/+", "approve/+", "deny/+");
+      if (mqttBoardAttached) subs.push("state");
+      return subs;
+    }
 
-      const updateAwareness = () => {
-        const states = Array.from(webrtcProvider.awareness.getStates().values());
-        remotePeersMap.clear();
-        pendingRequestsMap.clear();
-        states.forEach(st => {
-          if (st.user && st.user.clientId !== clientId) {
-            remotePeersMap.set(st.user.clientId, st.user);
-          }
-          const r = st.request;
-          if (isAdmin && r && r.deviceId && r.deviceId !== deviceId
-              && yApprovals.get(r.deviceId) !== true
-              && yDenials.get(r.deviceId) !== r.requestId) {
-            pendingRequestsMap.set(r.deviceId, r);
+    function updateMqttStatus() {
+      const n = mqttConnectedCount();
+      if (isApproved) {
+        if (n === 0) setSyncStatus("connecting", "Verbinding herstellen…");
+        else setSyncStatus("live", `Live · ${remotePeersMap.size + 1} online`);
+      } else if (!isDenied) {
+        if (n === 0) {
+          setWaitingStatus("Verbinden…");
+        } else {
+          const adminOnline = Array.from(remotePeersMap.values()).some(p => p.isAdmin);
+          setWaitingStatus(adminOnline
+            ? "Beheerder is online — wachten op goedkeuring"
+            : "Aanvraag verstuurd — wachten tot de beheerder online komt");
+        }
+      }
+    }
+
+    function handleMqttMessage(topic, buf) {
+      const prefix = mqttTopic("");
+      if (!topic.startsWith(prefix)) return;
+      const sub = topic.slice(prefix.length);
+      const text = buf.toString();
+      let data = null;
+      if (text) { try { data = JSON.parse(text); } catch (_) { return; } }
+      const [kind, id] = sub.split("/");
+
+      if (kind === "state") {
+        mqttStateReceived = true;
+        if (data && isApproved) applyRemoteState(data);
+      } else if (kind === "presence") {
+        if (!id || id === clientId) return;
+        if (!data || data.left) remotePeersMap.delete(id);
+        else remotePeersMap.set(id, { ...data, seenAt: Date.now() });
+        if (isApproved) renderActiveUsers();
+        updateMqttStatus();
+      } else if (kind === "req") {
+        if (!isAdmin || !id || id === deviceId) return;
+        if (!data) { pendingRequestsMap.delete(id); renderApprovalList(); return; }
+        if (approvedDevices.has(id)) {
+          // Al toegelaten (bv. opnieuw ingelogd): bevestiging nog eens sturen
+          mqttPublish(`approve/${id}`, { approved: true, by: userName, at: Date.now() }, true);
+          return;
+        }
+        if (deniedDevices.get(id) === data.requestId) return;
+        const isNew = !pendingRequestsMap.has(id);
+        pendingRequestsMap.set(id, { ...data, deviceId: id, seenAt: Date.now() });
+        if (isNew) renderApprovalList();
+      } else if (kind === "approve") {
+        if (!id) return;
+        if (data && data.approved) approvedDevices.add(id); else approvedDevices.delete(id);
+        if (id === deviceId && data && data.approved && !isAdmin) onApproved();
+        if (isAdmin && data && data.approved && pendingRequestsMap.delete(id)) renderApprovalList();
+      } else if (kind === "deny") {
+        if (!id) return;
+        if (data && data.requestId) deniedDevices.set(id, data.requestId); else deniedDevices.delete(id);
+        if (id === deviceId && data && data.requestId === requestId && !isAdmin) onDenied();
+      }
+    }
+
+    function sendAccessRequest() {
+      if (isApproved || isDenied || isAdmin) return;
+      mqttPublish(`req/${deviceId}`, { deviceId, requestId, name: userName, timestamp: Date.now() }, false);
+    }
+
+    function attachMqttBoard() {
+      if (mqttBoardAttached) return;
+      mqttBoardAttached = true;
+      mqttSubscribe(["state"]);
+      broadcastPresence();
+      updateMqttStatus();
+      // Nog geen opgeslagen bord op de server? Dan zetten wij de eerste versie.
+      setTimeout(() => {
+        if (!mqttStateReceived && isApproved) pushStateToPeers();
+      }, 3000);
+    }
+
+    async function initMqttSync() {
+      const mod = await import("https://esm.sh/mqtt@5.10.1/dist/mqtt.esm.js");
+      const mqtt = mod.default || mod;
+      syncMode = "mqtt";
+
+      mqttClients = MQTT_BROKERS.map(url => {
+        const c = mqtt.connect(url, {
+          clientId: `csk_${clientId.replace(/-/g, "").slice(0, 16)}_${Math.random().toString(36).slice(2, 8)}`,
+          clean: true,
+          keepalive: 30,
+          connectTimeout: 8000,
+          reconnectPeriod: 3000,
+          will: {
+            topic: mqttTopic(`presence/${clientId}`),
+            payload: JSON.stringify({ clientId, left: true }),
+            qos: 0,
+            retain: false
           }
         });
-        const n = webrtcProvider.awareness.getStates().size;
-        if (isApproved) {
-          setSyncStatus("live", n > 1 ? `Live · ${n} personen` : "Live · lokaal actief");
-          renderActiveUsers();
-          renderApprovalList();
-        } else {
-          const adminOnline = states.some(st => st.user && st.user.isAdmin);
-          setWaitingStatus(adminOnline ? "Beheerder is online — wachten op goedkeuring" : "Wachten tot de beheerder online komt");
-        }
-      };
-
-      webrtcProvider.awareness.on("change", updateAwareness);
+        c.on("connect", () => {
+          c.subscribe(currentSubscriptions().map(mqttTopic), { qos: 1 }, () => {
+            if (isApproved) { broadcastPresence(); scheduleSyncPush(); }
+            else sendAccessRequest();
+          });
+          updateMqttStatus();
+        });
+        c.on("close", updateMqttStatus);
+        c.on("offline", updateMqttStatus);
+        c.on("error", () => {});
+        c.on("message", handleMqttMessage);
+        return c;
+      });
 
       if (isAdmin) {
-        yApprovals.set(deviceId, true);
-      } else if (!isApproved) {
-        webrtcProvider.awareness.setLocalStateField("request", {
-          deviceId, requestId, name: userName, timestamp: Date.now()
-        });
+        approvedDevices.add(deviceId);
       }
-
-      broadcastPresence();
-      updateAwareness();
-      checkMyApproval();
-
       if (isApproved) {
-        const existing = yMap.get("payload");
-        if (existing && (existing.updatedAt || 0) > (state.updatedAt || 0)) {
-          applyRemoteState(existing);
-        } else {
-          await pushStateToPeers();
-        }
-        // Na de eerste sync met anderen opnieuw de nieuwste toestand ophalen
-        webrtcProvider.on("synced", () => {
-          const latest = yMap.get("payload");
-          if (latest) applyRemoteState(latest);
-        });
+        attachMqttBoard();
+      } else {
+        requestTimer = setInterval(sendAccessRequest, 3000);
       }
+
+      // Opruimen: wie niet meer reageert, verdwijnt uit de lijsten
+      setInterval(() => {
+        const now = Date.now();
+        let peersChanged = false;
+        remotePeersMap.forEach((p, id) => {
+          if (now - (p.seenAt || 0) > PRESENCE_TIMEOUT) { remotePeersMap.delete(id); peersChanged = true; }
+        });
+        if (peersChanged && isApproved) renderActiveUsers();
+        let reqChanged = false;
+        pendingRequestsMap.forEach((r, id) => {
+          if (now - (r.seenAt || 0) > REQUEST_TIMEOUT) { pendingRequestsMap.delete(id); reqChanged = true; }
+        });
+        if (reqChanged) renderApprovalList();
+        updateMqttStatus();
+      }, 3000);
+
+      window.addEventListener("beforeunload", () => {
+        mqttPublish(`presence/${clientId}`, { clientId, left: true }, false);
+        if (!isApproved) mqttPublish(`req/${deviceId}`, null, false);
+      });
+
+      setTimeout(() => {
+        if (mqttConnectedCount() === 0) {
+          if (isApproved) setSyncStatus("connecting", "Geen verbinding — lokaal opgeslagen");
+          else setWaitingStatus("Geen verbinding met de sync-server — controleer je internet");
+        }
+      }, 10000);
     }
 
     async function initSync() {
@@ -1384,7 +1609,7 @@
         && !cfg.apiKey.startsWith("JOUW_");
       try {
         if (hasFirebase) await initFirebaseSync(cfg);
-        else await initWebRtcSync();
+        else await initMqttSync();
       } catch (err) {
         console.error(err);
         syncMode = "local";
@@ -1392,7 +1617,6 @@
           setSyncStatus("connecting", "Lokaal opgeslagen");
           renderActiveUsers();
         } else {
-          // Zonder verbinding kan de beheerder niemand toelaten: bord blijft dicht
           setWaitingStatus("Geen verbinding — probeer later opnieuw");
         }
       }
@@ -1429,6 +1653,7 @@
       } else {
         task.checked = false;
       }
+      stampTask(task);
       triggerActivityFlash(`Verplaatste "${task.title.slice(0, 20)}..." naar ${LABELS[task.status]}`);
       saveState();
       render();
@@ -1446,6 +1671,7 @@
       } else {
         task.checked = false;
       }
+      stampTask(task);
       triggerActivityFlash(`Zette "${task.title.slice(0, 20)}..." in ${LABELS[status]}`);
       saveState();
       render();
@@ -1461,6 +1687,7 @@
         task.status = "done";
         if (!prevDone) fireConfetti();
       }
+      stampTask(task);
       triggerActivityFlash(checked ? `Vinkte "${task.title.slice(0, 20)}..." af` : `Haalde vinkje weg van "${task.title.slice(0, 20)}..."`);
       saveState();
       render();
@@ -1510,7 +1737,9 @@
 
     function renderCard(task) {
       const card = document.createElement("article");
-      card.className = "card" + (task.checked ? " done-checked" : "");
+      const remoteMove = recentRemoteMoves.get(task.id);
+      const showRemote = remoteMove && remoteMove.until > Date.now();
+      card.className = "card" + (task.checked ? " done-checked" : "") + (showRemote ? " remote-moved" : "");
       card.draggable = isApproved;
       card.dataset.id = task.id;
 
@@ -1538,6 +1767,12 @@
 
       top.appendChild(checkbox);
       top.appendChild(body);
+      if (showRemote) {
+        const tag = document.createElement("div");
+        tag.className = "remote-move-tag";
+        tag.textContent = `↔ ${remoteMove.by}`;
+        card.appendChild(tag);
+      }
       card.appendChild(top);
 
       const actions = document.createElement("div");
@@ -1566,6 +1801,12 @@
 
     function render() {
       const board = document.getElementById("board");
+      // FLIP-animatie: onthoud waar elke kaart stond, zodat verplaatste kaarten
+      // zichtbaar naar hun nieuwe plek glijden.
+      const prevRects = new Map();
+      board.querySelectorAll(".card[data-id]").forEach(el => {
+        prevRects.set(el.dataset.id, el.getBoundingClientRect());
+      });
       board.innerHTML = "";
 
       const query = searchQuery.toLowerCase().trim();
@@ -1607,6 +1848,21 @@
         col.appendChild(cards);
         board.appendChild(col);
       });
+
+      if (prevRects.size && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        board.querySelectorAll(".card[data-id]").forEach(el => {
+          const before = prevRects.get(el.dataset.id);
+          if (!before) return;
+          const after = el.getBoundingClientRect();
+          const dx = before.left - after.left;
+          const dy = before.top - after.top;
+          if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+          el.animate(
+            [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0, 0)" }],
+            { duration: 450, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" }
+          );
+        });
+      }
 
       updateStats();
       renderActiveUsers();
@@ -1711,6 +1967,7 @@
       if (!isApproved) return;
       if (!confirm("Alle kaarten terugzetten naar TODO?")) return;
       state = defaultState();
+      state.tasks.forEach(stampTask);
       triggerActivityFlash("Reset het volledige bord naar TODO");
       saveState();
       render();
