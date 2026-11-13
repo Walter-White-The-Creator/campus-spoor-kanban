@@ -50,8 +50,49 @@
       padding: 1rem;
     }
 
-    .modal-overlay.hidden {
-      display: none;
+    .modal-overlay.hidden,
+    .hidden {
+      display: none !important;
+    }
+
+    /* Bord pas tonen na inloggen + goedkeuring */
+    body.locked > header,
+    body.locked > .top-controls,
+    body.locked > .toolbar,
+    body.locked > main,
+    body.locked > footer {
+      display: none !important;
+    }
+
+    .login-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.25rem;
+      background: #f1f5f9;
+      padding: 0.25rem;
+      border-radius: 10px;
+    }
+
+    .login-tabs button {
+      border: none;
+      background: transparent;
+      padding: 0.55rem;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.875rem;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .login-tabs button.active {
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .waiting-denied {
+      color: #b91c1c;
+      font-weight: 600;
     }
 
     .modal-card {
@@ -664,34 +705,32 @@
     }
   </style>
 </head>
-<body>
-  <!-- Modal voor naam & beheerderssleutel -->
+<body class="locked">
+  <!-- Inlogscherm -->
   <div class="modal-overlay" id="usernameModal">
-    <div class="modal-card">
-      <h2>Welkom bij Campus Het Spoor</h2>
-      <p>Vul je voornaam in om toe te treden. Minstens 3 letters, geen nummers en geen ongepaste woorden.</p>
-      <input type="text" id="modalUsernameInput" placeholder="Jouw naam..." maxlength="20" autocomplete="off" />
-      
-      <div class="admin-key-box">
-        <label for="isAdminCheckbox">
-          <input type="checkbox" id="isAdminCheckbox" /> Ik ben de beheerder
-        </label>
-        <input type="password" id="adminKeyInput" placeholder="Beheerderssleutel (bijv. spoor2026)" class="hidden" autocomplete="off" />
+    <form class="modal-card" id="loginForm" autocomplete="off">
+      <h2>Inloggen — Campus Het Spoor</h2>
+      <div class="login-tabs" role="tablist">
+        <button type="button" class="active" id="tabUser" role="tab">Deelnemer</button>
+        <button type="button" id="tabAdmin" role="tab">Beheerder</button>
       </div>
-
+      <p id="loginHint">Vul je voornaam in. De beheerder moet je eerst toelaten voor je het bord ziet.</p>
+      <input type="text" id="modalUsernameInput" placeholder="Jouw naam..." maxlength="20" autocomplete="off" />
+      <input type="password" id="adminKeyInput" placeholder="Beheerderswachtwoord" class="hidden" autocomplete="off" />
       <div class="modal-error-msg" id="modalErrorMsg"></div>
-      <button type="button" class="primary" id="modalSubmitBtn">Verder naar bord</button>
-    </div>
+      <button type="submit" class="primary" id="modalSubmitBtn">Inloggen</button>
+    </form>
   </div>
 
-  <!-- Modal voor Wachtruimte -->
+  <!-- Wachtruimte -->
   <div class="modal-overlay hidden" id="waitingModal">
     <div class="modal-card" style="text-align: center;">
-      <h2>Wachten op goedkeuring...</h2>
-      <p>Je toelatingsverzoek is verzonden naar de beheerder. Even geduld tot je wordt toegelaten!</p>
-      <div style="margin: 1rem 0;">
-        <span class="sync-status connecting"><span class="dot"></span> <span>Wachten op beheerder</span></span>
+      <h2 id="waitingTitle">Wachten op goedkeuring...</h2>
+      <p id="waitingText">Je aanvraag is verzonden naar de beheerder. Laat dit venster open tot je wordt toegelaten.</p>
+      <div style="margin: 0.5rem 0;" id="waitingStatusWrap">
+        <span class="sync-status connecting"><span class="dot"></span> <span id="waitingStatusText">Verbinden…</span></span>
       </div>
+      <button type="button" id="waitingBackBtn">Terug naar inloggen</button>
     </div>
   </div>
 
@@ -719,6 +758,7 @@
       <label for="shareUrl">Link</label>
       <input type="text" id="shareUrl" readonly />
       <button type="button" id="copyLinkBtn" class="primary">Kopieer</button>
+      <button type="button" id="logoutBtn">Uitloggen</button>
       <span class="sync-status connecting" id="syncStatus">
         <span class="dot" aria-hidden="true"></span>
         <span id="syncStatusText">Verbinden…</span>
@@ -759,7 +799,9 @@
   <script type="module">
     const STORAGE_KEY = "campus-spoor-kanban-v8";
     const DEFAULT_ROOM = "spoor";
-    const ADMIN_KEY_SECRET = "spoor2026";
+    // SHA-256 van het beheerderswachtwoord (het wachtwoord zelf staat niet in de code).
+    // Nieuw wachtwoord? Zie README → "Beheerderswachtwoord wijzigen".
+    const ADMIN_PASSWORD_HASH = "de1654ed019d4bc04a5d9b60d25558947cf794e78a848b6edd79d717e85c5bd7";
 
     const INITIAL_TASKS = [
       { id: "1-1", category: "1. Beheer en gebruiksvriendelijkheid", title: "Simpeler beheer met drag-and-drop; minder ingewikkeld systeem" },
@@ -807,9 +849,19 @@
       return id;
     })();
 
+    // Vaste ID per toestel: goedkeuring blijft bewaard voor dit toestel
+    const deviceId = localStorage.getItem("kanban-device-id") || (() => {
+      const id = crypto.randomUUID();
+      localStorage.setItem("kanban-device-id", id);
+      return id;
+    })();
+
     let userName = localStorage.getItem("kanban-user-name") || "";
-    let isAdmin = localStorage.getItem(`kanban-is-admin:${getRoomId()}`) === "true";
-    let isApproved = isAdmin || localStorage.getItem(`kanban-approved:${getRoomId()}`) === "true";
+    let isAdmin = false;
+    let isApproved = false;
+    let isDenied = false;
+    let requestId = "";
+    let loginMode = "user";
     let currentActivity = "Kijkt naar het bord";
     let activityTimer = null;
 
@@ -1017,34 +1069,94 @@
         const item = document.createElement("div");
         item.className = "approval-item";
         item.innerHTML = `
-          <span>👤 ${escapeHtml(req.name)} wilt deelnemen</span>
+          <span>👤 ${escapeHtml(req.name)} wil deelnemen</span>
           <div style="display: flex; gap: 0.5rem;">
-            <button type="button" class="primary" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;" onclick="window.approveUser('${req.clientId}')">Toelaten</button>
-            <button type="button" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;" onclick="window.denyUser('${req.clientId}')">Weigeren</button>
+            <button type="button" class="primary" data-act="ok" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">Toelaten</button>
+            <button type="button" data-act="no" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">Weigeren</button>
           </div>
         `;
+        item.querySelector('[data-act="ok"]').addEventListener("click", () => approveUser(req.deviceId));
+        item.querySelector('[data-act="no"]').addEventListener("click", () => denyUser(req.deviceId, req.requestId));
         list.appendChild(item);
       });
     }
 
-    window.approveUser = async function(targetId) {
+    async function approveUser(targetId) {
+      if (!isAdmin) return;
       if (syncMode === "firebase" && firebaseDb) {
         const { ref, set } = firebaseApi;
         await set(ref(firebaseDb, `rooms/${getRoomId()}/approvals/${targetId}`), true);
         await set(ref(firebaseDb, `rooms/${getRoomId()}/requests/${targetId}`), null);
+      } else if (syncMode === "webrtc" && webrtcDoc) {
+        webrtcDoc.getMap("approvals").set(targetId, true);
+        webrtcDoc.getMap("denials").delete(targetId);
       }
       pendingRequestsMap.delete(targetId);
       renderApprovalList();
-    };
+    }
 
-    window.denyUser = async function(targetId) {
+    async function denyUser(targetId, reqId) {
+      if (!isAdmin) return;
       if (syncMode === "firebase" && firebaseDb) {
         const { ref, set } = firebaseApi;
+        await set(ref(firebaseDb, `rooms/${getRoomId()}/denials/${targetId}`), reqId || "x");
         await set(ref(firebaseDb, `rooms/${getRoomId()}/requests/${targetId}`), null);
+      } else if (syncMode === "webrtc" && webrtcDoc) {
+        webrtcDoc.getMap("denials").set(targetId, reqId || "x");
       }
       pendingRequestsMap.delete(targetId);
       renderApprovalList();
-    };
+    }
+
+    function approvedStorageKey() {
+      return `kanban-approved:${getRoomId()}`;
+    }
+
+    function setWaitingStatus(text) {
+      document.getElementById("waitingStatusText").textContent = text;
+    }
+
+    function unlockBoard() {
+      document.getElementById("usernameModal").classList.add("hidden");
+      document.getElementById("waitingModal").classList.add("hidden");
+      document.body.classList.remove("locked");
+      render();
+      renderApprovalList();
+    }
+
+    // Wordt aangeroepen wanneer de beheerder dit toestel toelaat
+    function onApproved() {
+      if (isApproved) return;
+      isApproved = true;
+      isDenied = false;
+      localStorage.setItem(approvedStorageKey(), "true");
+      if (syncMode === "webrtc" && webrtcProvider) {
+        webrtcProvider.awareness.setLocalStateField("request", null);
+        const existing = webrtcDoc.getMap("kanban").get("payload");
+        if (existing) applyRemoteState(existing);
+      }
+      unlockBoard();
+      if (syncMode === "firebase" && firebaseDb) {
+        attachFirebaseBoard();
+      } else {
+        const existing = webrtcDoc && webrtcDoc.getMap("kanban").get("payload");
+        if (!existing) pushStateToPeers(); else broadcastPresence();
+      }
+    }
+
+    function onDenied() {
+      if (isApproved || isDenied) return;
+      isDenied = true;
+      localStorage.removeItem(approvedStorageKey());
+      if (syncMode === "webrtc" && webrtcProvider) {
+        webrtcProvider.awareness.setLocalStateField("request", null);
+      }
+      document.getElementById("waitingTitle").textContent = "Toegang geweigerd";
+      const t = document.getElementById("waitingText");
+      t.textContent = "De beheerder heeft je aanvraag geweigerd. Je kan opnieuw inloggen om een nieuwe aanvraag te sturen.";
+      t.classList.add("waiting-denied");
+      document.getElementById("waitingStatusWrap").classList.add("hidden");
+    }
 
     async function broadcastPresence() {
       if (!isApproved) return;
@@ -1106,44 +1218,46 @@
       const app = initializeApp(cfg);
       firebaseDb = firebaseApi.getDatabase(app);
       syncMode = "firebase";
+      const { ref, set, onValue, onDisconnect } = firebaseApi;
+      const room = `rooms/${getRoomId()}`;
 
       if (isAdmin) {
-        const { ref, set } = firebaseApi;
-        await set(ref(firebaseDb, `rooms/${getRoomId()}/approvals/${clientId}`), true);
-        isApproved = true;
-      }
-
-      const approvalRef = firebaseApi.ref(firebaseDb, `rooms/${getRoomId()}/approvals/${clientId}`);
-      firebaseApi.onValue(approvalRef, (snap) => {
-        const approved = snap.val();
-        if (approved === true) {
-          isApproved = true;
-          localStorage.setItem(`kanban-approved:${getRoomId()}`, "true");
-          document.getElementById("waitingModal").classList.add("hidden");
-          render();
-          pushStateToPeers();
-        }
-      });
-
-      if (!isApproved && !isAdmin) {
-        const reqRef = firebaseApi.ref(firebaseDb, `rooms/${getRoomId()}/requests/${clientId}`);
-        firebaseApi.set(reqRef, { clientId, name: userName, timestamp: Date.now() });
-        document.getElementById("waitingModal").classList.remove("hidden");
-      }
-
-      if (isAdmin) {
-        const requestsRef = firebaseApi.ref(firebaseDb, `rooms/${getRoomId()}/requests`);
-        firebaseApi.onValue(requestsRef, (snap) => {
+        await set(ref(firebaseDb, `${room}/approvals/${deviceId}`), true);
+        onValue(ref(firebaseDb, `${room}/requests`), (snap) => {
           const val = snap.val() || {};
           pendingRequestsMap.clear();
           Object.values(val).forEach(req => {
-            if (req && req.clientId) pendingRequestsMap.set(req.clientId, req);
+            if (req && req.deviceId) pendingRequestsMap.set(req.deviceId, req);
           });
           renderApprovalList();
         });
+        attachFirebaseBoard();
+        return;
       }
 
-      const stateRef = firebaseApi.ref(firebaseDb, `rooms/${getRoomId()}/state`);
+      onValue(ref(firebaseDb, `${room}/approvals/${deviceId}`), (snap) => {
+        if (snap.val() === true) onApproved();
+      });
+      onValue(ref(firebaseDb, `${room}/denials/${deviceId}`), (snap) => {
+        if (snap.val() && snap.val() === requestId) onDenied();
+      });
+
+      if (isApproved) {
+        attachFirebaseBoard();
+      } else {
+        const reqRef = ref(firebaseDb, `${room}/requests/${deviceId}`);
+        await set(reqRef, { deviceId, requestId, name: userName, timestamp: Date.now() });
+        onDisconnect(reqRef).remove();
+        setWaitingStatus("Wachten op beheerder");
+      }
+    }
+
+    let firebaseBoardAttached = false;
+    function attachFirebaseBoard() {
+      if (firebaseBoardAttached) return;
+      firebaseBoardAttached = true;
+      const room = `rooms/${getRoomId()}`;
+      const stateRef = firebaseApi.ref(firebaseDb, `${room}/state`);
       let seeded = false;
       rtdbUnsub = firebaseApi.onValue(stateRef, (snap) => {
         if (!isApproved) return;
@@ -1154,7 +1268,7 @@
         setSyncStatus("live", "Live · Firebase");
       });
 
-      const presenceRef = firebaseApi.ref(firebaseDb, `rooms/${getRoomId()}/presence`);
+      const presenceRef = firebaseApi.ref(firebaseDb, `${room}/presence`);
       firebaseApi.onValue(presenceRef, (snap) => {
         if (!isApproved) return;
         const val = snap.val() || {};
@@ -1171,86 +1285,124 @@
 
       window.addEventListener("beforeunload", () => {
         const { ref, remove } = firebaseApi;
-        remove(ref(firebaseDb, `rooms/${getRoomId()}/presence/${clientId}`));
+        remove(ref(firebaseDb, `${room}/presence/${clientId}`));
       });
+      broadcastPresence();
     }
 
     async function initWebRtcSync() {
-      isApproved = true;
       const Y = await import("https://esm.sh/yjs@13.6.18");
-      const { WebrtcProvider } = await import("https://esm.sh/y-webrtc@10.3.0");
+      const { WebrtcProvider } = await import("https://esm.sh/y-webrtc@10.3.0?deps=yjs@13.6.18");
 
       webrtcDoc = new Y.Doc();
       webrtcProvider = new WebrtcProvider(getRoomId(), webrtcDoc, {
-        signaling: ["wss://signaling.yjs.dev", "wss://y-webrtc-eu.fly.dev"]
+        // Eigen signaalserver? Zet window.KANBAN_SIGNALING = ["wss://..."] in firebase-config.js
+        signaling: (Array.isArray(window.KANBAN_SIGNALING) && window.KANBAN_SIGNALING.length)
+          ? window.KANBAN_SIGNALING
+          : ["wss://signaling.yjs.dev", "wss://y-webrtc-eu.fly.dev"]
       });
       const yMap = webrtcDoc.getMap("kanban");
+      const yApprovals = webrtcDoc.getMap("approvals");
+      const yDenials = webrtcDoc.getMap("denials");
       syncMode = "webrtc";
 
       yMap.observe((event) => {
-        if (event.transaction.local) return;
+        if (event.transaction.local || !isApproved) return;
         const payload = yMap.get("payload");
         if (payload) applyRemoteState(payload);
       });
 
+      const checkMyApproval = () => {
+        if (isAdmin) return;
+        if (yApprovals.get(deviceId) === true) onApproved();
+        else if (!isApproved && requestId && yDenials.get(deviceId) === requestId) onDenied();
+      };
+      yApprovals.observe(() => { checkMyApproval(); updateAwareness(); });
+      yDenials.observe(() => { checkMyApproval(); updateAwareness(); });
+
       const updateAwareness = () => {
         const states = Array.from(webrtcProvider.awareness.getStates().values());
         remotePeersMap.clear();
+        pendingRequestsMap.clear();
         states.forEach(st => {
           if (st.user && st.user.clientId !== clientId) {
             remotePeersMap.set(st.user.clientId, st.user);
           }
+          const r = st.request;
+          if (isAdmin && r && r.deviceId && r.deviceId !== deviceId
+              && yApprovals.get(r.deviceId) !== true
+              && yDenials.get(r.deviceId) !== r.requestId) {
+            pendingRequestsMap.set(r.deviceId, r);
+          }
         });
         const n = webrtcProvider.awareness.getStates().size;
-        setSyncStatus("live", n > 1 ? `Live · ${n} personen` : "Live · lokaal actief");
-        renderActiveUsers();
+        if (isApproved) {
+          setSyncStatus("live", n > 1 ? `Live · ${n} personen` : "Live · lokaal actief");
+          renderActiveUsers();
+          renderApprovalList();
+        } else {
+          const adminOnline = states.some(st => st.user && st.user.isAdmin);
+          setWaitingStatus(adminOnline ? "Beheerder is online — wachten op goedkeuring" : "Wachten tot de beheerder online komt");
+        }
       };
 
       webrtcProvider.awareness.on("change", updateAwareness);
+
+      if (isAdmin) {
+        yApprovals.set(deviceId, true);
+      } else if (!isApproved) {
+        webrtcProvider.awareness.setLocalStateField("request", {
+          deviceId, requestId, name: userName, timestamp: Date.now()
+        });
+      }
+
       broadcastPresence();
       updateAwareness();
+      checkMyApproval();
 
-      const existing = yMap.get("payload");
-      if (existing && (existing.updatedAt || 0) > (state.updatedAt || 0)) {
-        applyRemoteState(existing);
-      } else {
-        await pushStateToPeers();
+      if (isApproved) {
+        const existing = yMap.get("payload");
+        if (existing && (existing.updatedAt || 0) > (state.updatedAt || 0)) {
+          applyRemoteState(existing);
+        } else {
+          await pushStateToPeers();
+        }
+        // Na de eerste sync met anderen opnieuw de nieuwste toestand ophalen
+        webrtcProvider.on("synced", () => {
+          const latest = yMap.get("payload");
+          if (latest) applyRemoteState(latest);
+        });
       }
     }
 
     async function initSync() {
       setSyncStatus("connecting", "Verbinden…");
+      setWaitingStatus("Verbinden…");
       updateShareUi();
       const cfg = window.FIREBASE_CONFIG;
-      const hasFirebase = cfg && cfg.apiKey && cfg.databaseURL && cfg.databaseURL.startsWith("https://");
+      const hasFirebase = cfg && cfg.apiKey && cfg.databaseURL && cfg.databaseURL.startsWith("https://")
+        && !cfg.apiKey.startsWith("JOUW_");
       try {
         if (hasFirebase) await initFirebaseSync(cfg);
         else await initWebRtcSync();
       } catch (err) {
+        console.error(err);
         syncMode = "local";
-        isApproved = true;
-        setSyncStatus("connecting", "Lokaal opgeslagen");
-        renderActiveUsers();
+        if (isApproved) {
+          setSyncStatus("connecting", "Lokaal opgeslagen");
+          renderActiveUsers();
+        } else {
+          // Zonder verbinding kan de beheerder niemand toelaten: bord blijft dicht
+          setWaitingStatus("Geen verbinding — probeer later opnieuw");
+        }
       }
     }
 
     function switchRoom(newRoomRaw) {
       const newRoom = sanitizeRoom(newRoomRaw);
       if (newRoom === getRoomId()) return;
-      isAdmin = localStorage.getItem(`kanban-is-admin:${newRoom}`) === "true";
-      isApproved = isAdmin || localStorage.getItem(`kanban-approved:${newRoom}`) === "true";
-      if (rtdbUnsub) rtdbUnsub();
-      if (webrtcProvider) webrtcProvider.destroy();
-      rtdbUnsub = null;
-      webrtcProvider = null;
-      firebaseDb = null;
-      webrtcDoc = null;
-      remotePeersMap.clear();
-      pendingRequestsMap.clear();
-      setRoomInUrl(newRoom);
-      state = loadState();
-      render();
-      initSync();
+      // Andere kamer = opnieuw inloggen (en eventueel opnieuw goedkeuring vragen)
+      location.href = `${location.pathname}?room=${encodeURIComponent(newRoom)}`;
     }
 
     function triggerActivityFlash(text) {
@@ -1460,65 +1612,79 @@
       renderActiveUsers();
     }
 
-    document.getElementById("isAdminCheckbox").addEventListener("change", (e) => {
-      const keyInput = document.getElementById("adminKeyInput");
-      if (e.target.checked) keyInput.classList.remove("hidden");
-      else keyInput.classList.add("hidden");
+    function setLoginMode(mode) {
+      loginMode = mode;
+      const admin = mode === "admin";
+      document.getElementById("tabUser").classList.toggle("active", !admin);
+      document.getElementById("tabAdmin").classList.toggle("active", admin);
+      document.getElementById("adminKeyInput").classList.toggle("hidden", !admin);
+      document.getElementById("loginHint").textContent = admin
+        ? "Log in als beheerder. Je komt meteen op het bord en kan anderen toelaten."
+        : "Vul je voornaam in. De beheerder moet je eerst toelaten voor je het bord ziet.";
+      document.getElementById("modalErrorMsg").textContent = "";
+    }
+
+    document.getElementById("tabUser").addEventListener("click", () => setLoginMode("user"));
+    document.getElementById("tabAdmin").addEventListener("click", () => {
+      setLoginMode("admin");
+      document.getElementById("adminKeyInput").focus();
     });
 
-    function handleUsernameSubmission(inputVal) {
-      const err = validateUsername(inputVal);
+    async function sha256Hex(text) {
+      const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    let loginBusy = false;
+    async function handleLogin() {
+      if (loginBusy) return;
       const inputEl = document.getElementById("modalUsernameInput");
       const errEl = document.getElementById("modalErrorMsg");
-      const isAdminChecked = document.getElementById("isAdminCheckbox").checked;
-      const adminKeyVal = document.getElementById("adminKeyInput").value.trim();
-
+      const inputVal = inputEl.value;
+      const err = validateUsername(inputVal);
       if (err) {
         inputEl.classList.add("error");
         errEl.textContent = err;
-        return false;
+        return;
       }
+      inputEl.classList.remove("error");
 
-      if (isAdminChecked) {
-        if (adminKeyVal !== ADMIN_KEY_SECRET) {
-          errEl.textContent = "Ongeldige beheerderssleutel.";
-          return false;
+      if (loginMode === "admin") {
+        const pw = document.getElementById("adminKeyInput").value;
+        loginBusy = true;
+        const ok = (await sha256Hex(pw)) === ADMIN_PASSWORD_HASH;
+        loginBusy = false;
+        if (!ok) {
+          errEl.textContent = "Ongeldig beheerderswachtwoord.";
+          return;
         }
         isAdmin = true;
         isApproved = true;
-        localStorage.setItem(`kanban-is-admin:${getRoomId()}`, "true");
-        localStorage.setItem(`kanban-approved:${getRoomId()}`, "true");
       } else {
         isAdmin = false;
-        isApproved = false;
-        localStorage.removeItem(`kanban-is-admin:${getRoomId()}`);
-        localStorage.removeItem(`kanban-approved:${getRoomId()}`);
+        isApproved = localStorage.getItem(approvedStorageKey()) === "true";
       }
 
-      inputEl.classList.remove("error");
       errEl.textContent = "";
       userName = inputVal.trim();
       localStorage.setItem("kanban-user-name", userName);
+      requestId = crypto.randomUUID();
       document.getElementById("usernameModal").classList.add("hidden");
       updateShareUi();
-      
-      if (!isApproved) {
-        document.getElementById("waitingModal").classList.remove("hidden");
-      }
+
+      if (isApproved) unlockBoard();
+      else document.getElementById("waitingModal").classList.remove("hidden");
 
       initSync();
-      return true;
     }
 
-    document.getElementById("modalSubmitBtn").addEventListener("click", () => {
-      handleUsernameSubmission(document.getElementById("modalUsernameInput").value);
+    document.getElementById("loginForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      handleLogin();
     });
 
-    document.getElementById("modalUsernameInput").addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        handleUsernameSubmission(e.target.value);
-      }
-    });
+    document.getElementById("logoutBtn").addEventListener("click", () => location.reload());
+    document.getElementById("waitingBackBtn").addEventListener("click", () => location.reload());
 
     document.getElementById("userNameInput").addEventListener("change", (e) => {
       const val = e.target.value;
@@ -1568,21 +1734,16 @@
     }
 
     setupFilters();
-    render();
     updateShareUi();
 
     setInterval(() => {
       if (userName && isApproved) broadcastPresence();
     }, 5000);
 
-    if (!userName || validateUsername(userName) !== null) {
-      document.getElementById("usernameModal").classList.remove("hidden");
-    } else {
-      if (!isApproved && !isAdmin) {
-        document.getElementById("waitingModal").classList.remove("hidden");
-      }
-      initSync();
-    }
+    // Altijd eerst het inlogscherm tonen
+    document.getElementById("modalUsernameInput").value = userName;
+    document.getElementById("usernameModal").classList.remove("hidden");
+    document.getElementById(userName ? "modalSubmitBtn" : "modalUsernameInput").focus();
   </script>
 </body>
 </html>
